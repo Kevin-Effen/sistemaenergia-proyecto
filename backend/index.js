@@ -18,8 +18,21 @@ const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 
+// --- util para generar device_key ---
+function genDeviceKey() {
+  return crypto.randomBytes(32).toString('hex'); // 64 hex
+}
+
+
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Habilitar CORS explícitamente para el frontend
+app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
+app.use(express.json());
+
+// Endpoint de salud
+app.get('/health', (_req, res) => res.json({ ok: true, service: 'backend' }));
 
 /* =========================================================
    Seguridad básica y parsing
@@ -844,6 +857,33 @@ app.post(
   }
 );
 
+// =========================================================
+// Rotar la device_key (ADMIN)
+// =========================================================
+app.put(
+  '/eolicos/:id/rotar-key',
+  requireAuth,
+  requireRole('administrador'),
+  [param('id').isInt({ min: 1 })],
+  (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errores: errors.array() });
+
+    const eolicoId = Number(req.params.id);
+    const newKey = genDeviceKey();
+
+    db.query(
+      'UPDATE eolicos SET device_key=? WHERE id_eolico=?',
+      [newKey, eolicoId],
+      (err) => {
+        if (err) return res.status(500).json({ mensaje: 'Error en servidor' });
+        // devolvemos la nueva clave para que el admin la copie al ESP32
+        res.json({ ok: true, device_key: newKey });
+      }
+    );
+  }
+);
+
 // Actualizar SOLO costos/tarifa (y opcionalmente el alquiler activo)
 app.put(
   '/eolicos/:id/costos',
@@ -1587,9 +1627,69 @@ app.get('/eolicos/:id/recibo', requireAuth, requireRole('administrador'), (req, 
   });
 });
 
-/* =========================================================
-   Iniciar servidor
-========================================================= */
-app.listen(PORT, () => {
-  console.log(`🚀 Backend escuchando en http://localhost:${PORT}`);
+// =========================================================
+// Mis dispositivos (por cuenta del usuario logueado)
+// =========================================================
+app.get('/cliente/dispositivos', requireAuth, (req, res) => {
+  const cuentaId = req.user.cuenta_id;
+
+  const sql = `
+    SELECT 
+      e.id_eolico,
+      e.codigo,
+      e.habilitado,
+      e.activo,
+      e.fecha_creacion,
+      u.id_usuario,
+      CONCAT(u.nombres, ' ', u.primer_apellido) AS duenio
+    FROM eolicos e
+    JOIN usuarios u ON u.id_usuario = e.usuario_id
+    WHERE u.cuenta_id = ?
+    ORDER BY e.fecha_creacion DESC, e.id_eolico DESC
+  `;
+  db.query(sql, [cuentaId], (err, rows) => {
+    if (err) return res.status(500).send('Error en servidor');
+    res.json(rows || []);
+  });
+});
+
+// Lecturas por dispositivo (código)
+app.get('/cliente/lecturas', requireAuth, (req, res) => {
+  const cuentaId = req.user.cuenta_id;
+  const codigo = (req.query.codigo || '').trim();
+  const limit = Math.min(Number(req.query.limit || 200), 1000);
+  if (!codigo) return res.status(400).json({ mensaje: 'codigo es requerido' });
+
+  const sql = `
+    SELECT l.id_lectura, l.voltaje, l.bateria, l.consumo, l.fecha_lectura,
+           e.id_eolico, e.codigo
+    FROM lecturas_resumen l
+    JOIN eolicos e  ON e.id_eolico = l.eolico_id
+    JOIN usuarios u ON u.id_usuario = e.usuario_id
+    WHERE u.cuenta_id = ? AND e.codigo = ?
+    ORDER BY l.fecha_lectura DESC, l.id_lectura DESC
+    LIMIT ?`;
+  db.query(sql, [cuentaId, codigo, limit], (err, rows) => {
+    if (err) return res.status(500).send('Error en servidor');
+    res.json(rows || []);
+  });
+});
+
+// --- Health (si no lo tienes) ---
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, service: 'backend', time: new Date().toISOString() });
+});
+
+// --- START SERVER (debe existir solo una vez y al final) ---
+const http = require('http');
+const HOST = process.env.HOST || '0.0.0.0';
+
+const server = http.createServer(app);
+
+server.listen(PORT, HOST, () => {
+  console.log(`[backend] listening on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
+});
+
+server.on('error', (err) => {
+  console.error('Server listen error:', err.code || err.message, err);
 });
