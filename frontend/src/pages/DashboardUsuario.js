@@ -39,32 +39,8 @@ ChartJS.register(
 );
 
 /* =========================
-   Utilidades y datos mock
+   Utilidades
 ========================= */
-
-// Genera una serie de lecturas ficticias con una onda suave + ruido
-function generarLecturasMock(n = 20) {
-  const base = new Date();
-  const res = [];
-  let bateria = 90; // arranca alta y baja poco a poco
-  for (let i = n - 1; i >= 0; i--) {
-    const t = new Date(base.getTime() - i * 60 * 1000); // cada minuto
-    const k = (n - i) / n;
-    const voltaje =
-      12.5 + Math.sin(k * Math.PI * 2) * 0.35 + (Math.random() - 0.5) * 0.15;
-    bateria = Math.max(10, bateria - Math.random() * 0.6); // va bajando
-    const consumo =
-      50 + Math.cos(k * Math.PI * 2) * 6 + (Math.random() - 0.5) * 4;
-
-    res.push({
-      fecha_lectura: t.toISOString(),
-      voltaje: Number(voltaje.toFixed(2)),
-      bateria: Number(bateria.toFixed(0)),
-      consumo: Number(consumo.toFixed(1)),
-    });
-  }
-  return res.reverse(); // más antiguo -> más nuevo
-}
 
 function generarAlertasDesdeLecturas(lecturas) {
   const UMBRAL_BATERIA = 20;
@@ -97,7 +73,6 @@ export default function DashboardUsuario() {
   const navigate = useNavigate();
 
   // ---- Estado UI ----
-  const [usarMock, setUsarMock] = useState(true); // ⬅️ por defecto datos REALES
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
@@ -184,43 +159,36 @@ export default function DashboardUsuario() {
     })();
   }, [navigate]);
 
-  // ---- Carga de datos (real o mock) ----
+  // ---- Carga de datos desde el backend ----
   const cargar = useCallback(async () => {
     setCargando(true);
     setError("");
     try {
-      if (usarMock) {
-        // Simulamos latencia
-        await new Promise((r) => setTimeout(r, 400));
-        const m = generarLecturasMock(24);
-        setLecturas(m);
-        setAlertas(generarAlertasDesdeLecturas(m));
-      } else {
-        // Si no hay dispositivo seleccionado, no podemos cargar datos reales
-        if (!dispositivoSeleccionado) {
-          setLecturas([]);
-          setAlertas([]);
-          setError("No hay dispositivo seleccionado");
-          return;
-        }
-
-        // Cargar lecturas del dispositivo seleccionado
-        const rLect = await api.get("/cliente/lecturas", {
-          params: { codigo: dispositivoSeleccionado, limit: 50 }
-        });
-        
-        const lect = Array.isArray(rLect.data) ? rLect.data : [];
-        
-        // Las lecturas vienen DESC, las ordenamos ASC para el gráfico
-        const ordenadas = lect
-          .slice()
-          .sort(
-            (a, b) => new Date(a.fecha_lectura) - new Date(b.fecha_lectura)
-          );
-        
-        setLecturas(ordenadas);
-        setAlertas(generarAlertasDesdeLecturas(ordenadas));
+      // Si no hay dispositivo seleccionado, no podemos cargar datos
+      if (!dispositivoSeleccionado) {
+        setLecturas([]);
+        setAlertas([]);
+        setError("Selecciona un dispositivo para ver los datos");
+        setCargando(false);
+        return;
       }
+
+      // Cargar lecturas del dispositivo seleccionado desde el backend
+      const rLect = await api.get("/cliente/lecturas", {
+        params: { codigo: dispositivoSeleccionado, limit: 50 }
+      });
+      
+      const lect = Array.isArray(rLect.data) ? rLect.data : [];
+      
+      // Las lecturas vienen DESC, las ordenamos ASC para el gráfico
+      const ordenadas = lect
+        .slice()
+        .sort(
+          (a, b) => new Date(a.fecha_lectura) - new Date(b.fecha_lectura)
+        );
+      
+      setLecturas(ordenadas);
+      setAlertas(generarAlertasDesdeLecturas(ordenadas));
     } catch (e) {
       if (e?.response?.status === 401) {
         localStorage.clear();
@@ -234,46 +202,16 @@ export default function DashboardUsuario() {
     } finally {
       setCargando(false);
     }
-  }, [usarMock, dispositivoSeleccionado, navigate]);
+  }, [dispositivoSeleccionado, navigate]);
 
   useEffect(() => {
     cargar();
-    // Auto-refresco cada 30s en modo real; 5s en mock para “vivo”
-    const ms = usarMock ? 5000 : 30000;
+    // Auto-refresco cada 30 segundos
     const id = setInterval(() => {
-      if (usarMock) {
-        // Avanzamos la serie con un nuevo punto mock
-        setLecturas((prev) => {
-          const base = prev.length ? prev[prev.length - 1] : generarLecturasMock(1)[0];
-          const t = new Date(base.fecha_lectura);
-          t.setMinutes(t.getMinutes() + 1);
-
-          const voltaje =
-            (base.voltaje ?? 12.5) +
-            (Math.random() - 0.5) * 0.15 +
-            Math.sin(Date.now() / 180000) * 0.05;
-          const bateria = Math.max(10, (base.bateria ?? 80) - Math.random() * 0.5);
-          const consumo =
-            (base.consumo ?? 50) +
-            (Math.random() - 0.5) * 2.5 +
-            Math.cos(Date.now() / 200000) * 1.5;
-
-          const nuevo = {
-            fecha_lectura: t.toISOString(),
-            voltaje: Number(voltaje.toFixed(2)),
-            bateria: Number(bateria.toFixed(0)),
-            consumo: Number(consumo.toFixed(1)),
-          };
-          const next = [...prev.slice(-23), nuevo]; // mantenemos ~24 puntos
-          setAlertas(generarAlertasDesdeLecturas(next));
-          return next;
-        });
-      } else {
-        cargar();
-      }
-    }, ms);
+      cargar();
+    }, 30000);
     return () => clearInterval(id);
-  }, [cargar, usarMock]);
+  }, [cargar]);
 
   // ---- Modal de alerta cuando batería < 20 % (si llega un valor crítico nuevo) ----
   const [showAlerta, setShowAlerta] = useState(false);
@@ -348,13 +286,13 @@ export default function DashboardUsuario() {
         },
       },
       interaction: { mode: "nearest", intersect: false },
-      animation: { duration: usarMock ? 600 : 300, easing: "easeOutQuart" },
+      animation: { duration: 300, easing: "easeOutQuart" },
       scales: {
         y: { beginAtZero: false },
         x: { ticks: { maxRotation: 0, autoSkip: true } },
       },
     }),
-    [usarMock]
+    []
   );
 
   const ultimaFecha =
@@ -394,13 +332,6 @@ export default function DashboardUsuario() {
           </div>
 
           <div className="d-flex align-items-center gap-3">
-            <Form.Check
-              type="switch"
-              id="switchMock"
-              label="Usar datos de prueba"
-              checked={usarMock}
-              onChange={() => setUsarMock((v) => !v)}
-            />
             <Button
               variant="outline-secondary"
               onClick={cargar}
@@ -415,46 +346,44 @@ export default function DashboardUsuario() {
       {error && <div className="alert alert-danger">{error}</div>}
 
       {/* Selector de dispositivos */}
-      {!usarMock && (
-        <Card className="shadow-sm mb-4 border-0">
-          <Card.Body className="py-3">
-            <Row className="align-items-center">
-              <Col md={8}>
-                <div className="d-flex align-items-center gap-3">
-                  <div className="text-muted" style={{ minWidth: 180 }}>
-                    <strong>Seleccionar dispositivo:</strong>
-                  </div>
-                  {cargandoDispositivos ? (
-                    <Spinner animation="border" size="sm" />
-                  ) : dispositivos.length === 0 ? (
-                    <div className="text-muted">No tienes dispositivos asignados</div>
-                  ) : (
-                    <Form.Select
-                      value={dispositivoSeleccionado || ""}
-                      onChange={(e) => setDispositivoSeleccionado(e.target.value)}
-                      style={{ maxWidth: 400 }}
-                    >
-                      {dispositivos.map((disp) => (
-                        <option key={disp.codigo} value={disp.codigo}>
-                          {disp.codigo} - {disp.habilitado ? "✓ Activo" : "✗ Inactivo"}
-                        </option>
-                      ))}
-                    </Form.Select>
-                  )}
+      <Card className="shadow-sm mb-4 border-0">
+        <Card.Body className="py-3">
+          <Row className="align-items-center">
+            <Col md={8}>
+              <div className="d-flex align-items-center gap-3">
+                <div className="text-muted" style={{ minWidth: 180 }}>
+                  <strong>Seleccionar dispositivo:</strong>
                 </div>
-              </Col>
-              <Col md={4} className="text-md-end mt-2 mt-md-0">
-                {dispositivoSeleccionado && (
-                  <Badge bg="success" className="px-3 py-2">
-                    <i className="bi bi-check-circle me-1"></i>
-                    Monitoreando: {dispositivoSeleccionado}
-                  </Badge>
+                {cargandoDispositivos ? (
+                  <Spinner animation="border" size="sm" />
+                ) : dispositivos.length === 0 ? (
+                  <div className="text-muted">No tienes dispositivos asignados</div>
+                ) : (
+                  <Form.Select
+                    value={dispositivoSeleccionado || ""}
+                    onChange={(e) => setDispositivoSeleccionado(e.target.value)}
+                    style={{ maxWidth: 400 }}
+                  >
+                    {dispositivos.map((disp) => (
+                      <option key={disp.codigo} value={disp.codigo}>
+                        {disp.codigo} - {disp.habilitado ? "✓ Activo" : "✗ Inactivo"}
+                      </option>
+                    ))}
+                  </Form.Select>
                 )}
-              </Col>
-            </Row>
-          </Card.Body>
-        </Card>
-      )}
+              </div>
+            </Col>
+            <Col md={4} className="text-md-end mt-2 mt-md-0">
+              {dispositivoSeleccionado && (
+                <Badge bg="success" className="px-3 py-2">
+                  <i className="bi bi-check-circle me-1"></i>
+                  Monitoreando: {dispositivoSeleccionado}
+                </Badge>
+              )}
+            </Col>
+          </Row>
+        </Card.Body>
+      </Card>
 
       {/* KPIs */}
       <Row className="g-3 mb-4">
