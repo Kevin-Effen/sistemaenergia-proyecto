@@ -101,6 +101,11 @@ export default function DashboardUsuario() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
+  // ---- Dispositivos del usuario ----
+  const [dispositivos, setDispositivos] = useState([]);
+  const [dispositivoSeleccionado, setDispositivoSeleccionado] = useState(null);
+  const [cargandoDispositivos, setCargandoDispositivos] = useState(true);
+
   // ---- Datos ----
   const [lecturas, setLecturas] = useState([]);
   const [alertas, setAlertas] = useState([]);
@@ -123,7 +128,7 @@ export default function DashboardUsuario() {
 
   const arrow = (d) => (d == null ? "" : d > 0 ? "▲" : d < 0 ? "▼" : "■");
 
-  // ---- Guard de sesión/rol + carga de perfil real ----
+  // ---- Guard de sesión/rol + carga de perfil real y dispositivos ----
   useEffect(() => {
     const token = localStorage.getItem("token");
     const rol = (localStorage.getItem("rol") || "").toLowerCase();
@@ -141,12 +146,11 @@ export default function DashboardUsuario() {
       return;
     }
 
-    // Traemos el PERFIL REAL del backend
+    // Traemos el PERFIL REAL y DISPOSITIVOS del backend
     (async () => {
       try {
+        // Cargar perfil
         const r = await api.get("/me-detalle");
-        // Esperado del backend (según tu index.js):
-        // { nombre_completo, email, telefono, direccion, ... }
         const p = r?.data || {};
         setPerfil({
           nombre_completo:
@@ -160,10 +164,22 @@ export default function DashboardUsuario() {
           telefono: p.telefono || "",
           direccion: p.direccion || "",
         });
+
+        // Cargar dispositivos asignados
+        const dispRes = await api.get("/cliente/dispositivos");
+        const disps = Array.isArray(dispRes.data) ? dispRes.data : [];
+        setDispositivos(disps);
+        
+        // Seleccionar automáticamente el primer dispositivo si existe
+        if (disps.length > 0) {
+          setDispositivoSeleccionado(disps[0].codigo);
+        }
       } catch (e) {
-        console.error("Error cargando perfil:", e);
-        // Fallback minimal
+        console.error("Error cargando perfil/dispositivos:", e);
         setPerfil({ nombre_completo: "Usuario", email: "", telefono: "", direccion: "" });
+        setDispositivos([]);
+      } finally {
+        setCargandoDispositivos(false);
       }
     })();
   }, [navigate]);
@@ -180,20 +196,30 @@ export default function DashboardUsuario() {
         setLecturas(m);
         setAlertas(generarAlertasDesdeLecturas(m));
       } else {
-        const [rLect, rAl] = await Promise.all([
-          api.get("/resumen"),
-          api.get("/alertas"),
-        ]);
+        // Si no hay dispositivo seleccionado, no podemos cargar datos reales
+        if (!dispositivoSeleccionado) {
+          setLecturas([]);
+          setAlertas([]);
+          setError("No hay dispositivo seleccionado");
+          return;
+        }
+
+        // Cargar lecturas del dispositivo seleccionado
+        const rLect = await api.get("/cliente/lecturas", {
+          params: { codigo: dispositivoSeleccionado, limit: 50 }
+        });
+        
         const lect = Array.isArray(rLect.data) ? rLect.data : [];
-        const als = Array.isArray(rAl.data) ? rAl.data : [];
-        // /resumen backend devuelve DESC; ordenamos ASC para el gráfico
+        
+        // Las lecturas vienen DESC, las ordenamos ASC para el gráfico
         const ordenadas = lect
           .slice()
           .sort(
             (a, b) => new Date(a.fecha_lectura) - new Date(b.fecha_lectura)
           );
+        
         setLecturas(ordenadas);
-        setAlertas(als.slice(0, 5));
+        setAlertas(generarAlertasDesdeLecturas(ordenadas));
       }
     } catch (e) {
       if (e?.response?.status === 401) {
@@ -202,13 +228,13 @@ export default function DashboardUsuario() {
         return;
       }
       console.error(e);
-      setError("No se pudieron obtener las lecturas.");
+      setError("No se pudieron obtener las lecturas del dispositivo.");
       setLecturas([]);
       setAlertas([]);
     } finally {
       setCargando(false);
     }
-  }, [usarMock, navigate]);
+  }, [usarMock, dispositivoSeleccionado, navigate]);
 
   useEffect(() => {
     cargar();
@@ -387,6 +413,48 @@ export default function DashboardUsuario() {
       </div>
 
       {error && <div className="alert alert-danger">{error}</div>}
+
+      {/* Selector de dispositivos */}
+      {!usarMock && (
+        <Card className="shadow-sm mb-4 border-0">
+          <Card.Body className="py-3">
+            <Row className="align-items-center">
+              <Col md={8}>
+                <div className="d-flex align-items-center gap-3">
+                  <div className="text-muted" style={{ minWidth: 180 }}>
+                    <strong>Seleccionar dispositivo:</strong>
+                  </div>
+                  {cargandoDispositivos ? (
+                    <Spinner animation="border" size="sm" />
+                  ) : dispositivos.length === 0 ? (
+                    <div className="text-muted">No tienes dispositivos asignados</div>
+                  ) : (
+                    <Form.Select
+                      value={dispositivoSeleccionado || ""}
+                      onChange={(e) => setDispositivoSeleccionado(e.target.value)}
+                      style={{ maxWidth: 400 }}
+                    >
+                      {dispositivos.map((disp) => (
+                        <option key={disp.codigo} value={disp.codigo}>
+                          {disp.codigo} - {disp.habilitado ? "✓ Activo" : "✗ Inactivo"}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  )}
+                </div>
+              </Col>
+              <Col md={4} className="text-md-end mt-2 mt-md-0">
+                {dispositivoSeleccionado && (
+                  <Badge bg="success" className="px-3 py-2">
+                    <i className="bi bi-check-circle me-1"></i>
+                    Monitoreando: {dispositivoSeleccionado}
+                  </Badge>
+                )}
+              </Col>
+            </Row>
+          </Card.Body>
+        </Card>
+      )}
 
       {/* KPIs */}
       <Row className="g-3 mb-4">
