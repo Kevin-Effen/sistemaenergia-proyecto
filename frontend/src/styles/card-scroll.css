@@ -1,0 +1,80 @@
+/* Variables globales */
+:root { 
+  --card-pad-x: 0;
+  --users-col1-w: 70px;
+  --users-col2-w: 200px;
+}
+
+/* El contenedor principal del SmartScroll */
+.card-scroll.table-shell {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Barra de scroll superior */
+.card-scroll .table-top-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-bottom: 8px;
+  height: 16px;
+  background: transparent;
+}
+
+/* Contenedor de la tabla con scroll */
+.card-scroll .table-bottom-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  position: relative;
+}
+
+/* La tabla dentro del scroll */
+.card-scroll .table-bottom-scroll table {
+  width: 100%;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+/* Headers sticky verticalmente */
+.card-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8f9fa;
+  white-space: nowrap;
+}
+
+/* Columnas sticky horizontalmente */
+.card-scroll .sticky-col-1 { 
+  position: sticky; 
+  left: 0; 
+  z-index: 3;
+  background: #fff;
+  min-width: var(--users-col1-w);
+  box-shadow: 2px 0 4px rgba(0,0,0,.08);
+}
+
+.card-scroll .sticky-col-2 { 
+  position: sticky; 
+  left: var(--users-col1-w); 
+  z-index: 3;
+  background: #fff;
+  min-width: var(--users-col2-w);
+  box-shadow: 2px 0 4px rgba(0,0,0,.08);
+}
+
+/* Headers de columnas sticky necesitan z-index mayor */
+.card-scroll thead .sticky-col-1,
+.card-scroll thead .sticky-col-2 {
+  z-index: 4;
+  background: #f8f9fa;
+}
+
+/* Filas pares */
+.card-scroll tbody tr:nth-child(even) .sticky-col-1,
+.card-scroll tbody tr:nth-child(even) .sticky-col-2 {
+  background: #f8f9fa;
+}
