@@ -29,15 +29,6 @@ ChartJS.register(
   Legend
 );
 
-/* ===== Datos de prueba para demo ===== */
-const mockLecturas = [
-  { fecha_lectura: "2025-08-15T09:00:00", voltaje: 12.4, bateria: 86, consumo: 48 },
-  { fecha_lectura: "2025-08-15T10:00:00", voltaje: 12.7, bateria: 84, consumo: 52 },
-  { fecha_lectura: "2025-08-15T11:00:00", voltaje: 12.6, bateria: 82, consumo: 53 },
-  { fecha_lectura: "2025-08-15T12:00:00", voltaje: 12.5, bateria: 81, consumo: 55 },
-  { fecha_lectura: "2025-08-15T13:00:00", voltaje: 12.8, bateria: 79, consumo: 58 },
-];
-
 /* ===== Helper: obtener PNG en alta resolución del chart ===== */
 const toBase64HiDPI = (chartRef, scale = 3) => {
   const chart = chartRef?.current;
@@ -81,8 +72,7 @@ function Graficos() {
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(true);
 
-  // switches
-  const [usarMock, setUsarMock] = useState(true); // alterna demo / backend
+  // switch para tiempo real (simulado)
   const [tiempoReal, setTiempoReal] = useState(false); // simula stream en vivo
 
   // === soporte para admin buscar un usuario ===
@@ -135,37 +125,33 @@ function Graficos() {
       .slice(0, 20);
   }, [busqueda, usuarios]);
 
-  // ===== Cargar datos (backend o mock), según usuario seleccionado (admin) =====
+  // ===== Cargar datos desde el backend, según usuario seleccionado (admin) =====
   const cargar = useCallback(async () => {
     try {
       setCargando(true);
       setError("");
 
-      if (usarMock) {
-        setDatos(mockLecturas);
-      } else {
-        // si soy admin y hay un usuario seleccionado, pedir sus datos
-        const userId = soyAdmin && seleccionado?.id_usuario ? seleccionado.id_usuario : undefined;
-        const url = userId ? `/resumen?userId=${encodeURIComponent(userId)}` : "/resumen";
-        const res = await api.get(url);
-        const arr = Array.isArray(res.data) ? res.data : [];
-        setDatos(
-          arr.map((d, i) => ({
-            fecha_lectura:
-              d.fecha_lectura || new Date(Date.now() - (arr.length - i) * 3600e3).toISOString(),
-            voltaje: Number(d.voltaje) || 0,
-            bateria: Number(d.bateria) || 0,
-            consumo: Number(d.consumo) || 0,
-          }))
-        );
-      }
+      // si soy admin y hay un usuario seleccionado, pedir sus datos
+      const userId = soyAdmin && seleccionado?.id_usuario ? seleccionado.id_usuario : undefined;
+      const url = userId ? `/resumen?userId=${encodeURIComponent(userId)}` : "/resumen";
+      const res = await api.get(url);
+      const arr = Array.isArray(res.data) ? res.data : [];
+      setDatos(
+        arr.map((d, i) => ({
+          fecha_lectura:
+            d.fecha_lectura || new Date(Date.now() - (arr.length - i) * 3600e3).toISOString(),
+          voltaje: Number(d.voltaje) || 0,
+          bateria: Number(d.bateria) || 0,
+          consumo: Number(d.consumo) || 0,
+        }))
+      );
     } catch (e) {
       setError("No se pudo cargar los datos.");
       setDatos([]);
     } finally {
       setCargando(false);
     }
-  }, [usarMock, soyAdmin, seleccionado]);
+  }, [soyAdmin, seleccionado]);
 
   useEffect(() => {
     cargar();
@@ -282,9 +268,7 @@ function Graficos() {
     await generarPDF({
       titulo,
       usuario: nombreUsuario,
-      descripcion: usarMock
-        ? "Datos de prueba (mock)"
-        : tiempoReal
+      descripcion: tiempoReal
         ? "Tiempo real"
         : soyAdmin && seleccionado
         ? `Datos del usuario ID ${seleccionado.id_usuario}`
@@ -298,7 +282,6 @@ function Graficos() {
 
   // Texto “Mostrando…”
   const tituloContexto = useMemo(() => {
-    if (usarMock) return "Mostrando: datos de prueba (mock)";
     if (soyAdmin && seleccionado) {
       const nom =
         [seleccionado.nombres, seleccionado.primer_apellido, seleccionado.segundo_apellido]
@@ -307,7 +290,7 @@ function Graficos() {
       return `Mostrando: ${nom} (ID ${seleccionado.id_usuario})`;
     }
     return me?.usuario ? `Mostrando: ${me.usuario}` : "Mostrando: usuario actual";
-  }, [usarMock, soyAdmin, seleccionado, me]);
+  }, [soyAdmin, seleccionado, me]);
 
   return (
     <div className="container my-5 animate__animated animate__fadeIn">
@@ -320,18 +303,6 @@ function Graficos() {
           </div>
 
           <div className="d-flex align-items-center gap-3">
-            <div className="form-check form-switch m-0">
-              <input
-                className="form-check-input"
-                type="checkbox"
-                id="switchMock"
-                checked={usarMock}
-                onChange={() => setUsarMock((prev) => !prev)}
-              />
-              <label className="form-check-label" htmlFor="switchMock">
-                Usar datos de prueba
-              </label>
-            </div>
             <div className="form-check form-switch m-0">
               <input
                 className="form-check-input"
@@ -351,7 +322,7 @@ function Graficos() {
         </div>
       </div>
 
-      {/* Buscador de usuarios (solo admin, desactivado si usarMock) */}
+      {/* Buscador de usuarios (solo admin) */}
       {soyAdmin && (
         <div className="card shadow-sm mb-3">
           <div className="card-body">
@@ -364,7 +335,6 @@ function Graficos() {
                   placeholder="Buscar usuario por nombre, correo, CI…"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
-                  disabled={usarMock}
                 />
               </div>
               <button
@@ -374,7 +344,7 @@ function Graficos() {
                   setSeleccionado(null);
                   cargar(); // recargar al usuario actual (o sin userId)
                 }}
-                disabled={usarMock && !seleccionado}
+                disabled={!seleccionado}
               >
                 Limpiar selección
               </button>
@@ -382,7 +352,7 @@ function Graficos() {
             </div>
 
             {/* dropdown simple con resultados */}
-            {!usarMock && busqueda && usuariosFiltrados.length > 0 && (
+            {busqueda && usuariosFiltrados.length > 0 && (
               <div className="list-group mt-2" style={{ maxHeight: 280, overflowY: "auto" }}>
                 {usuariosFiltrados.map((u) => {
                   const nombreCompleto = [u.nombres, u.primer_apellido, u.segundo_apellido]
@@ -412,7 +382,7 @@ function Graficos() {
               </div>
             )}
 
-            {soyAdmin && !usarMock && seleccionado && (
+            {soyAdmin && seleccionado && (
               <div className="mt-2">
                 <span className="badge bg-info text-dark">
                   Seleccionado: ID {seleccionado.id_usuario}
