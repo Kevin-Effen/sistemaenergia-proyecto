@@ -312,7 +312,7 @@ function Usuarios() {
       setErrorGlobal("");
       const res = await api.get("/reporte-usuarios", { responseType: "blob" });
       const dispo = res.headers["content-disposition"] || "";
-      const match = dispo.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i);
+      const match = dispo.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
       const filename = match ? decodeURIComponent(match[1]) : "reporte_usuarios.csv";
       const blob = new Blob([res.data], { type: "text/csv;charset=utf-8;" });
       const url = window.URL.createObjectURL(blob);

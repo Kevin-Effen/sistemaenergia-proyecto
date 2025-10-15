@@ -34,6 +34,7 @@ function NavBarComponent({ usuario: usuarioProp, onLogout }) {
       setBgIndex((prev) => (prev + 1) % paisajes.length);
     }, 5000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Cargar detalle del usuario
