@@ -3,11 +3,13 @@ import React, { useEffect, useState } from "react";
 import {
   Card,
   Button,
+  Alert,
   Row,
   Col,
   Table,
   Badge,
   Accordion,
+  Spinner,
 } from "react-bootstrap";
 import {
   FaPhoneAlt,
@@ -15,6 +17,8 @@ import {
   FaMapMarkerAlt,
   FaCopy,
   FaCheck,
+  FaDownload,
+  FaHeartbeat,
   FaTrashAlt,
 } from "react-icons/fa";
 import api from "../api/axios";
@@ -40,6 +44,9 @@ const fmtFecha = (iso) => (iso ? new Date(iso).toLocaleString() : "—");
 
 export default function Contactos() {
   const [copied, setCopied] = useState({ email: false, cel: false });
+  const [probando, setProbando] = useState(false);
+  const [estadoAPI, setEstadoAPI] = useState(null);
+  const [estadoMsg, setEstadoMsg] = useState("");
 
   const [nota, setNota] = useState("");
   const [notas, setNotas] = useState([]);
@@ -73,6 +80,36 @@ export default function Contactos() {
       pushHist("copiar", field === "email" ? "Email de soporte" : "Teléfono de soporte");
       setTimeout(() => setCopied((c) => ({ ...c, [field]: false })), 1500);
     } catch {}
+  };
+
+  // Descargar manual
+  const onDescargarManual = () => {
+    const link = document.createElement("a");
+    link.href = MANUAL_URL;
+    link.download = "manual_usuario.pdf";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    pushHist("descargar", "Manual del usuario");
+  };
+
+  // Probar conexión al backend
+  const onProbarConexion = async () => {
+    setProbando(true);
+    setEstadoAPI(null);
+    setEstadoMsg("");
+    try {
+      const r = await api.get("/me");
+      setEstadoAPI("ok");
+      setEstadoMsg(`Conectado. Usuario: ${r?.data?.usuario || "—"}`);
+      pushHist("probar", "Conexión OK");
+    } catch {
+      setEstadoAPI("fail");
+      setEstadoMsg("No se pudo conectar al backend.");
+      pushHist("probar", "Conexión FALLÓ");
+    } finally {
+      setProbando(false);
+    }
   };
 
   // Notas

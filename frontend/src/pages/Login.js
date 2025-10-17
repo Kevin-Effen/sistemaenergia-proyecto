@@ -35,8 +35,7 @@ function Login() {
       setCurrentImage((prev) => (prev + 1) % imagenesFondo.length);
     }, 5000);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [imagenesFondo.length]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
