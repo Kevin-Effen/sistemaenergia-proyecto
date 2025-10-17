@@ -22,6 +22,7 @@ function NavBarComponent({ usuario: usuarioProp, onLogout }) {
   const [me, setMe] = useState(null);                   // /me-detalle
   const [loadingMe, setLoadingMe] = useState(true);
   const [showPerfil, setShowPerfil] = useState(false);  // Modal "Mi perfil"
+  const [alertasCount, setAlertasCount] = useState(0);  // Contador de alertas
 
   const paisajes = ["/paisaje1.jpg", "/paisaje3.png", "/paisaje2.jpg"];
   const location = useLocation();
@@ -34,7 +35,6 @@ function NavBarComponent({ usuario: usuarioProp, onLogout }) {
       setBgIndex((prev) => (prev + 1) % paisajes.length);
     }, 5000);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Cargar detalle del usuario
@@ -59,6 +59,31 @@ function NavBarComponent({ usuario: usuarioProp, onLogout }) {
     if (!isLoginPage && localStorage.getItem("token")) cargar();
     return () => { cancel = true; };
   }, [isLoginPage, navigate]);
+
+  // Cargar contador de alertas
+  useEffect(() => {
+    let cancel = false;
+    const cargarAlertas = async () => {
+      try {
+        const res = await api.get("/alertas");
+        if (!cancel && Array.isArray(res.data)) {
+          setAlertasCount(res.data.length);
+        }
+      } catch (e) {
+        // Silenciar error, no es crítico
+      }
+    };
+    if (!isLoginPage && localStorage.getItem("token")) {
+      cargarAlertas();
+      // Actualizar cada 30 segundos
+      const interval = setInterval(cargarAlertas, 30000);
+      return () => {
+        cancel = true;
+        clearInterval(interval);
+      };
+    }
+    return () => { cancel = true; };
+  }, [isLoginPage]);
 
   // Fallbacks
   let datosUsuarioLS = {};
@@ -182,9 +207,27 @@ function NavBarComponent({ usuario: usuarioProp, onLogout }) {
                       Reportes PDF
                     </Nav.Link>
                     <Nav.Link as={Link} to="/alertas" className="text-white nav-item-hover">
-                      Alertas
+                      <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                      Alertas Globales
+                      {alertasCount > 0 && (
+                        <Badge bg="danger" className="ms-2 animate__animated animate__pulse animate__infinite">
+                          {alertasCount}
+                        </Badge>
+                      )}
                     </Nav.Link>
                   </>
+                )}
+
+                {rol === "usuario" && (
+                  <Nav.Link as={Link} to="/alertas" className="text-white nav-item-hover">
+                    <i className="bi bi-bell-fill me-1"></i>
+                    Mis Alertas
+                    {alertasCount > 0 && (
+                      <Badge bg="warning" text="dark" className="ms-2 animate__animated animate__pulse animate__infinite">
+                        {alertasCount}
+                      </Badge>
+                    )}
+                  </Nav.Link>
                 )}
 
                 <NavDropdown
@@ -271,10 +314,42 @@ function NavBarComponent({ usuario: usuarioProp, onLogout }) {
                   <Nav.Link as={Link} to="/reportes" onClick={handleClose} className="nav-item-hover">
                     Reportes PDF
                   </Nav.Link>
-                  <Nav.Link as={Link} to="/alertas" onClick={handleClose} className="nav-item-hover">
-                    Alertas
+                  <Nav.Link 
+                    as={Link} 
+                    to="/alertas" 
+                    onClick={handleClose} 
+                    className="nav-item-hover d-flex align-items-center justify-content-between"
+                  >
+                    <span>
+                      <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                      Alertas Globales
+                    </span>
+                    {alertasCount > 0 && (
+                      <Badge bg="danger" className="animate__animated animate__pulse animate__infinite">
+                        {alertasCount}
+                      </Badge>
+                    )}
                   </Nav.Link>
                 </>
+              )}
+
+              {rol === "usuario" && (
+                <Nav.Link 
+                  as={Link} 
+                  to="/alertas" 
+                  onClick={handleClose} 
+                  className="nav-item-hover d-flex align-items-center justify-content-between"
+                >
+                  <span>
+                    <i className="bi bi-bell-fill me-2"></i>
+                    Mis Alertas
+                  </span>
+                  {alertasCount > 0 && (
+                    <Badge bg="warning" text="dark" className="animate__animated animate__pulse animate__infinite">
+                      {alertasCount}
+                    </Badge>
+                  )}
+                </Nav.Link>
               )}
 
               <NavDropdown
