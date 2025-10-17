@@ -292,63 +292,139 @@ function AlertasDashboard() {
         </div>
       </div>
 
-      {/* Tabla */}
+      {/* Tabla o Estado Vacío */}
       <div className="card shadow-sm" style={{ borderRadius: 14 }}>
         <div className="card-body">
           <h5 className="card-title mb-3">
             Lecturas {rol === "administrador" ? "— todos los usuarios" : ""}
           </h5>
 
-          <div className="table-responsive">
-            <table className="table table-bordered table-striped align-middle text-center">
-              <thead className="table-light">
-                <tr>
-                  <th>Fecha</th>
-                  {rol === "administrador" && <th>Usuario</th>}
-                  {rol === "administrador" && <th>Rol</th>}
-                  <th>Voltaje (V)</th>
-                  <th>Batería (%)</th>
-                  <th>Consumo (W)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {datos.map((d, i) => (
-                  <tr key={i}>
-                    <td>{fmtFecha(d?.fecha_lectura)}</td>
-                    {rol === "administrador" && <td>{d?.login || "—"}</td>}
-                    {rol === "administrador" && <td>{d?.rol || "—"}</td>}
-                    <td className={Number(d?.voltaje) > UMBRAL.VOLTAJE_ALTO ? "text-danger fw-semibold" : ""}>
-                      {fmtNum(d?.voltaje)}
-                    </td>
-                    <td className={Number(d?.bateria) < UMBRAL.BATERIA_BAJA ? "text-warning fw-semibold" : ""}>
-                      {fmtNum(d?.bateria)}
-                    </td>
-                    <td className={Number(d?.consumo) > UMBRAL.CONSUMO_ALTO ? "text-info fw-semibold" : ""}>
-                      {fmtNum(d?.consumo)}
-                    </td>
-                  </tr>
-                ))}
-
-                {datos.length === 0 && (
-                  <tr>
-                    <td colSpan={rol === "administrador" ? 6 : 4} className="text-muted">
-                      No hay lecturas para mostrar.
-                    </td>
-                  </tr>
+          {/* Estado Vacío Mejorado */}
+          {!cargando && datos.length === 0 && (
+            <div className="text-center py-5">
+              <div className="mb-4">
+                {rol === "administrador" ? (
+                  <i className="bi bi-database-x" style={{ fontSize: "4rem", color: "#6c757d" }}></i>
+                ) : (
+                  <i className="bi bi-plug" style={{ fontSize: "4rem", color: "#ffc107" }}></i>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </div>
+              
+              <h4 className="text-muted mb-3">
+                {rol === "administrador" 
+                  ? "No hay datos en el sistema"
+                  : "Equipo Eólico No Conectado"
+                }
+              </h4>
+              
+              <p className="text-muted mb-4">
+                {rol === "administrador" ? (
+                  <>
+                    No se encontraron lecturas en el rango de fechas seleccionado.
+                    <br />
+                    Verifica que los equipos eólicos estén enviando datos correctamente.
+                  </>
+                ) : (
+                  <>
+                    Tu equipo eólico no ha enviado datos en el rango seleccionado.
+                    <br />
+                    Esto puede deberse a:
+                  </>
+                )}
+              </p>
 
-          <div className="text-end">
-            <button
-              className="btn btn-outline-success mt-2"
-              onClick={exportarPDF}
-              disabled={datos.length === 0}
-            >
-              🖨️ Descargar PDF
-            </button>
-          </div>
+              {rol === "usuario" && (
+                <div className="alert alert-warning mx-auto" style={{ maxWidth: "600px" }}>
+                  <ul className="list-unstyled mb-0 text-start">
+                    <li className="mb-2">
+                      <i className="bi bi-exclamation-circle me-2"></i>
+                      <strong>Equipo sin conectar:</strong> Verifica la conexión física del dispositivo
+                    </li>
+                    <li className="mb-2">
+                      <i className="bi bi-wifi-off me-2"></i>
+                      <strong>Sin conexión a internet:</strong> Revisa tu red WiFi/datos móviles
+                    </li>
+                    <li className="mb-2">
+                      <i className="bi bi-battery-half me-2"></i>
+                      <strong>Batería agotada:</strong> El equipo puede estar sin energía
+                    </li>
+                    <li className="mb-0">
+                      <i className="bi bi-calendar-x me-2"></i>
+                      <strong>Rango de fechas:</strong> Intenta ampliar el rango de búsqueda
+                    </li>
+                  </ul>
+                </div>
+              )}
+
+              <div className="mt-4">
+                <button 
+                  className="btn btn-outline-primary me-2"
+                  onClick={() => setRango(30)}
+                >
+                  <i className="bi bi-arrow-clockwise me-1"></i>
+                  Buscar últimos 30 días
+                </button>
+                
+                {rol === "usuario" && (
+                  <button 
+                    className="btn btn-outline-secondary"
+                    onClick={() => navigate("/contactos")}
+                  >
+                    <i className="bi bi-headset me-1"></i>
+                    Contactar Soporte
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Tabla de Datos */}
+          {datos.length > 0 && (
+            <>
+              <div className="table-responsive">
+                <table className="table table-bordered table-striped align-middle text-center">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Fecha</th>
+                      {rol === "administrador" && <th>Usuario</th>}
+                      {rol === "administrador" && <th>Rol</th>}
+                      <th>Voltaje (V)</th>
+                      <th>Batería (%)</th>
+                      <th>Consumo (W)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {datos.map((d, i) => (
+                      <tr key={i}>
+                        <td>{fmtFecha(d?.fecha_lectura)}</td>
+                        {rol === "administrador" && <td>{d?.login || "—"}</td>}
+                        {rol === "administrador" && <td>{d?.rol || "—"}</td>}
+                        <td className={Number(d?.voltaje) > UMBRAL.VOLTAJE_ALTO ? "text-danger fw-semibold" : ""}>
+                          {fmtNum(d?.voltaje)}
+                        </td>
+                        <td className={Number(d?.bateria) < UMBRAL.BATERIA_BAJA ? "text-warning fw-semibold" : ""}>
+                          {fmtNum(d?.bateria)}
+                        </td>
+                        <td className={Number(d?.consumo) > UMBRAL.CONSUMO_ALTO ? "text-info fw-semibold" : ""}>
+                          {fmtNum(d?.consumo)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="text-end">
+                <button
+                  className="btn btn-outline-success mt-2"
+                  onClick={exportarPDF}
+                  disabled={datos.length === 0}
+                >
+                  🖨️ Descargar PDF
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
