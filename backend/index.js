@@ -772,6 +772,85 @@ app.get('/alertas', requireAuth, (req, res) => {
 });
 
 /* =========================================================
+   Alertas con rango de fechas (para usuarios)
+========================================================= */
+app.get('/alertas/rango', requireAuth, (req, res) => {
+  const { desde, hasta, soloAlertas } = req.query;
+  
+  // Validación de parámetros
+  if (!desde || !hasta) {
+    return res.status(400).json({ error: 'Se requieren parámetros desde y hasta' });
+  }
+
+  // Construir condición de alertas si se requiere
+  const alertaCondition = soloAlertas === 'true' 
+    ? `AND ((lr.bateria IS NOT NULL AND lr.bateria < 20) OR (lr.voltaje IS NOT NULL AND lr.voltaje < 10))`
+    : '';
+
+  const sql = `
+    SELECT lr.voltaje, lr.bateria, lr.consumo, lr.fecha_lectura
+    FROM lecturas_resumen lr
+    JOIN usuarios u ON u.id_usuario = lr.usuario_id
+    WHERE u.cuenta_id = ?
+      AND DATE(lr.fecha_lectura) >= ?
+      AND DATE(lr.fecha_lectura) <= ?
+      ${alertaCondition}
+    ORDER BY lr.fecha_lectura DESC
+  `;
+
+  db.query(sql, [req.user.cuenta_id, desde, hasta], (err, rows) => {
+    if (err) {
+      console.error('Error en /alertas/rango:', err);
+      return res.status(500).json({ error: 'Error en servidor' });
+    }
+    res.json(rows);
+  });
+});
+
+/* =========================================================
+   Alertas con rango de fechas (para administradores)
+========================================================= */
+app.get('/alertas/admin-rango', requireAuth, requireRole('administrador'), (req, res) => {
+  const { desde, hasta, soloAlertas } = req.query;
+  
+  // Validación de parámetros
+  if (!desde || !hasta) {
+    return res.status(400).json({ error: 'Se requieren parámetros desde y hasta' });
+  }
+
+  // Construir condición de alertas si se requiere
+  const alertaCondition = soloAlertas === 'true'
+    ? `AND ((lr.bateria IS NOT NULL AND lr.bateria < 20) OR (lr.voltaje IS NOT NULL AND lr.voltaje < 10))`
+    : '';
+
+  const sql = `
+    SELECT 
+      lr.voltaje, 
+      lr.bateria, 
+      lr.consumo, 
+      lr.fecha_lectura,
+      c.usuario as login,
+      r.nombre_rol as rol
+    FROM lecturas_resumen lr
+    JOIN usuarios u ON u.id_usuario = lr.usuario_id
+    JOIN cuentas c ON c.id_cuenta = u.cuenta_id
+    JOIN roles r ON r.id_rol = u.rol_id
+    WHERE DATE(lr.fecha_lectura) >= ?
+      AND DATE(lr.fecha_lectura) <= ?
+      ${alertaCondition}
+    ORDER BY lr.fecha_lectura DESC
+  `;
+
+  db.query(sql, [desde, hasta], (err, rows) => {
+    if (err) {
+      console.error('Error en /alertas/admin-rango:', err);
+      return res.status(500).json({ error: 'Error en servidor' });
+    }
+    res.json(rows);
+  });
+});
+
+/* =========================================================
    Reporte CSV (usuarios)
 ========================================================= */
 app.get('/reporte-usuarios', requireAuth, requireRole('administrador'), (req, res) => {
