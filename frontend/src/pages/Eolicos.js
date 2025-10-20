@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/axios";
+import * as bootstrap from 'bootstrap';
 
 /* =========== Utils =========== */
 const norm = (s) =>
@@ -92,6 +93,34 @@ export default function Eolicos() {
   });
   const [aplicarAlquiler, setAplicarAlquiler] = useState(true); // ✅ nuevo estado
 
+  // === Modal de Alquiler Mejorado ===
+  const [openModalAlquiler, setOpenModalAlquiler] = useState(false);
+  const [equipoAlquiler, setEquipoAlquiler] = useState(null);
+  const [alquilerForm, setAlquilerForm] = useState({
+    usuario_id: "",
+    costo_instalacion: 300, // Default en bolivianos
+    tarifa_mensual: 50,      // Default en bolivianos
+    deposito: 0,
+    fecha_inicio: new Date().toISOString().slice(0, 10),
+    generar_cuotas: true,    // Generar automáticamente cuotas
+  });
+  const [procesandoAlquiler, setProcesandoAlquiler] = useState(false);
+
+  // === Modal Registrar Pago ===
+  const [openModalPago, setOpenModalPago] = useState(false);
+  const [equipoPago, setEquipoPago] = useState(null);
+  const [pagoForm, setPagoForm] = useState({
+    monto: "",
+    metodo_pago: "efectivo", // efectivo, transferencia, qr
+    observaciones: "",
+  });
+  const [procesandoPago, setProcesandoPago] = useState(false);
+
+  // === Modal Cambiar Usuario ===
+  const [openModalCambioUsuario, setOpenModalCambioUsuario] = useState(false);
+  const [equipoCambio, setEquipoCambio] = useState(null);
+  const [nuevoUsuarioId, setNuevoUsuarioId] = useState("");
+
   // === Cuotas ===
   // Modal “Generar plan de cuotas”
   const [openPlan, setOpenPlan] = useState(false);
@@ -140,6 +169,20 @@ export default function Eolicos() {
     cargarTodo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Inicializar dropdowns de Bootstrap
+  useEffect(() => {
+    const dropdownElementList = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+    const dropdownList = [...dropdownElementList].map(dropdownToggleEl => new bootstrap.Dropdown(dropdownToggleEl));
+    
+    return () => {
+      dropdownList.forEach(dropdown => {
+        if (dropdown && dropdown.dispose) {
+          dropdown.dispose();
+        }
+      });
+    };
+  }, [lista]); // Re-inicializar cuando cambie la lista de equipos
 
   /* Helpers */
   const showBackendError = (e, fallback = "Ocurrió un error") => {
@@ -370,15 +413,46 @@ export default function Eolicos() {
 
   // Pagar una cuota
   const pagarCuota = async (id_cuota) => {
+    // Validar que no se esté procesando otra cuota
+    if (pagandoId !== 0) {
+      console.log("⚠️ Ya se está procesando otra cuota, ignorando...");
+      return;
+    }
+
+    console.log("💳 Iniciando pago de cuota:", id_cuota);
+
     try {
       setPagandoId(id_cuota);
-      await api.put(`/cuotas/${id_cuota}/pagar`, { metodo_pago: "efectivo", observaciones: "Caja" });
+      
+      console.log("📡 Enviando petición al backend...");
+      const response = await api.put(`/cuotas/${id_cuota}/pagar`, { 
+        metodo_pago: "efectivo", 
+        observaciones: "Pago registrado desde módulo de alquileres" 
+      });
+      
+      console.log("✅ Respuesta del servidor:", response.data);
+      
+      // Actualizar la lista de cuotas localmente
       setListaCuotas((prev) =>
-        prev.map((c) => (c.id_cuota === id_cuota ? { ...c, pagado: 1, fecha_pago: new Date().toISOString() } : c))
+        prev.map((c) => 
+          c.id_cuota === id_cuota 
+            ? { ...c, pagado: 1, fecha_pago: new Date().toISOString() } 
+            : c
+        )
       );
+      
+      console.log("✅ Lista de cuotas actualizada localmente");
+      
+      // Mostrar mensaje de éxito
+      alert("✅ Cuota marcada como pagada exitosamente. Ahora puedes descargar el recibo PDF.");
+      
     } catch (e) {
-      showBackendError(e, "No se pudo marcar como pagada.");
+      console.error("❌ Error al pagar cuota:", e);
+      console.error("Detalles del error:", e.response?.data || e.message);
+      showBackendError(e, "No se pudo marcar como pagada. Verifica que la cuota exista y no esté ya pagada.");
     } finally {
+      // Siempre resetear el estado, incluso si hay error
+      console.log("🔄 Reseteando estado de pagandoId");
       setPagandoId(0);
     }
   };
@@ -413,6 +487,233 @@ export default function Eolicos() {
       alert("No se pudo abrir el PDF de cuotas.");
     } finally {
       clearRowBusy(id_eolico);
+    }
+  };
+
+  // === Nuevas Funciones para Alquiler Mejorado ===
+
+  /**
+   * Abrir modal para asignar equipo y crear alquiler
+   */
+  const abrirModalAlquiler = (equipo) => {
+    setEquipoAlquiler(equipo);
+    setAlquilerForm({
+      usuario_id: "",
+      costo_instalacion: 300, // Costo estándar en Bs
+      tarifa_mensual: Number(equipo.tarifa_mes) || 50, // Usar tarifa del equipo o default
+      deposito: Number(equipo.deposito) || 0,
+      fecha_inicio: new Date().toISOString().slice(0, 10),
+      generar_cuotas: true,
+    });
+    setOpenModalAlquiler(true);
+  };
+
+  /**
+   * Crear alquiler con generación automática de cuotas
+   */
+  const crearAlquiler = async () => {
+    if (!equipoAlquiler) return;
+    if (!alquilerForm.usuario_id) {
+      alert("Selecciona un usuario");
+      return;
+    }
+
+    // Validar que los valores numéricos sean válidos
+    const costoInstalacion = Number(alquilerForm.costo_instalacion) || 0;
+    const tarifaMensual = Number(alquilerForm.tarifa_mensual) || 0;
+    const deposito = Number(alquilerForm.deposito) || 0;
+    
+    if (costoInstalacion < 0 || tarifaMensual < 0 || deposito < 0) {
+      alert("Los costos no pueden ser negativos");
+      return;
+    }
+
+    const id_eolico = equipoAlquiler.id_eolico;
+    
+    try {
+      setProcesandoAlquiler(true);
+      setRowBusy(id_eolico, "asignar");
+
+      // Paso 1: Asignar equipo al usuario
+      await api.put(`/eolicos/${id_eolico}/asignar`, { 
+        usuario_id: Number(alquilerForm.usuario_id) 
+      });
+
+      // Paso 2: Actualizar costos del equipo
+      await api.put(`/eolicos/${id_eolico}/costos`, {
+        tarifa_mes: tarifaMensual,
+        costo_instalacion: costoInstalacion,
+        deposito: deposito,
+        costo_operativo_dia: Number(equipoAlquiler.costo_operativo_dia) || 0,
+        aplicar_alquiler_activo: true,
+      });
+
+      // Paso 3: Si está habilitada la generación automática de cuotas
+      if (alquilerForm.generar_cuotas) {
+        // Generar primera cuota (Instalación + Primer mes)
+        // NOTA: Para concepto 'instalacion', el backend calcula monto_total automáticamente
+        // pero como queremos instalación + primer mes, enviamos el monto_total explícito
+        const montoPrimeraCuota = costoInstalacion + tarifaMensual;
+        
+        const fechaInicio = new Date(alquilerForm.fecha_inicio);
+        const fechaVencimiento = new Date(fechaInicio);
+        fechaVencimiento.setDate(fechaVencimiento.getDate() + 7); // 7 días para pagar
+        
+        // Primera cuota: Instalación + Primer mes
+        if (montoPrimeraCuota > 0) {
+          await api.post(`/eolicos/${id_eolico}/cuotas/generar`, {
+            concepto: "instalacion",
+            numero_cuotas: 1,
+            periodicidad: "mensual", // Backend solo acepta: mensual, semanal, diaria
+            primera_fecha: fechaVencimiento.toISOString().slice(0, 10),
+            monto_total: montoPrimeraCuota,
+            descripcion: `Instalación (Bs ${costoInstalacion.toFixed(2)}) + Primer mes (Bs ${tarifaMensual.toFixed(2)})`,
+          });
+        }
+
+        // Generar cuotas mensuales (próximos 12 meses)
+        // Para concepto 'tarifa', NO enviamos monto_total, el backend lo calcula automáticamente
+        if (tarifaMensual > 0) {
+          const fechaSegundaCuota = new Date(fechaInicio);
+          fechaSegundaCuota.setMonth(fechaSegundaCuota.getMonth() + 1);
+          
+          await api.post(`/eolicos/${id_eolico}/cuotas/generar`, {
+            concepto: "tarifa",
+            numero_cuotas: 12,
+            periodicidad: "mensual",
+            primera_fecha: fechaSegundaCuota.toISOString().slice(0, 10),
+            // NO enviamos monto_total - el backend lo calcula como: tarifa_mes * 12
+            descripcion: "Alquiler mensual del sistema eólico",
+          });
+        }
+      }
+
+      // Cerrar modal y recargar
+      setOpenModalAlquiler(false);
+      await cargarTodo();
+      
+      alert("✅ Alquiler creado exitosamente.\n" + 
+            (alquilerForm.generar_cuotas ? "Se generaron las cuotas automáticamente." : ""));
+
+    } catch (e) {
+      showBackendError(e, "No se pudo crear el alquiler.");
+    } finally {
+      setProcesandoAlquiler(false);
+      clearRowBusy(id_eolico);
+    }
+  };
+
+  /**
+   * Abrir modal para registrar un pago
+   */
+  const abrirRegistrarPago = (equipo) => {
+    setEquipoPago(equipo);
+    setPagoForm({
+      monto: equipo.tarifa_mes || 50,
+      metodo_pago: "efectivo",
+      observaciones: "",
+    });
+    setOpenModalPago(true);
+  };
+
+  /**
+   * Registrar pago y generar recibo
+   */
+  const registrarPago = async () => {
+    if (!equipoPago) return;
+    if (!pagoForm.monto || Number(pagoForm.monto) <= 0) {
+      alert("Ingresa un monto válido");
+      return;
+    }
+
+    try {
+      setProcesandoPago(true);
+      
+      // Buscar la siguiente cuota pendiente del alquiler
+      const id_eolico = equipoPago.id_eolico;
+      const responseCuotas = await api.get(`/eolicos/${id_eolico}/cuotas`);
+      const cuotas = responseCuotas.data?.cuotas || [];
+      
+      const cuotaPendiente = cuotas.find(c => !c.pagado);
+      
+      if (!cuotaPendiente) {
+        alert("No hay cuotas pendientes de pago");
+        return;
+      }
+
+      // Marcar cuota como pagada
+      await api.put(`/cuotas/${cuotaPendiente.id_cuota}/pagar`, {
+        metodo_pago: pagoForm.metodo_pago,
+        observaciones: pagoForm.observaciones || "Pago registrado desde módulo de alquiler",
+      });
+
+      // Generar recibo PDF automáticamente
+      const token = localStorage.getItem("token") || "";
+      const base = api.defaults.baseURL || "";
+      const url = `${base}/eolicos/${id_eolico}/recibo`;
+      
+      const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (resp.ok) {
+        const blob = await resp.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const win = window.open(blobUrl, "_blank");
+        if (!win) {
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = `recibo_${equipoPago.codigo}_${new Date().getTime()}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+      }
+
+      setOpenModalPago(false);
+      await cargarTodo();
+      alert("✅ Pago registrado exitosamente.\nSe generó el recibo PDF.");
+
+    } catch (e) {
+      showBackendError(e, "No se pudo registrar el pago.");
+    } finally {
+      setProcesandoPago(false);
+    }
+  };
+
+  /**
+   * Abrir modal para cambiar de usuario
+   */
+  const abrirModalCambiarUsuario = (equipo) => {
+    setEquipoCambio(equipo);
+    setNuevoUsuarioId("");
+    setOpenModalCambioUsuario(true);
+  };
+
+  /**
+   * Cambiar usuario asignado
+   */
+  const cambiarUsuario = async () => {
+    if (!equipoCambio) return;
+    if (!nuevoUsuarioId) {
+      alert("Selecciona un usuario");
+      return;
+    }
+
+    try {
+      const id_eolico = equipoCambio.id_eolico;
+      setRowBusy(id_eolico, "asignar");
+      
+      await api.put(`/eolicos/${id_eolico}/asignar`, { 
+        usuario_id: Number(nuevoUsuarioId) 
+      });
+
+      setOpenModalCambioUsuario(false);
+      await cargarTodo();
+      alert("✅ Usuario cambiado exitosamente");
+
+    } catch (e) {
+      showBackendError(e, "No se pudo cambiar el usuario.");
+    } finally {
+      clearRowBusy(equipoCambio?.id_eolico);
     }
   };
 
@@ -466,27 +767,14 @@ export default function Eolicos() {
         <div className="card-body">
           <div className="table-responsive">
             <table className="table table-striped table-bordered align-middle">
-              <thead>
-                {/* Fila 1: headers principales */}
-                <tr className="table-light align-middle">
-                  <th style={{ minWidth: 70 }}>Nro.</th>
-                  <th style={{ minWidth: 130 }}>Código</th>
-                  <th style={{ minWidth: 180 }}>Usuario asignado</th>
-                  <th style={{ minWidth: 160 }}>Login</th>
-                  <th style={{ minWidth: 120 }}>Estado</th>
-                  <th colSpan="4" className="text-center" style={{ minWidth: 420 }}>
-                    Costos
-                  </th>
-                  <th style={{ minWidth: 520 }}>Acciones</th>
-                </tr>
-                {/* Fila 2: subheaders de costos */}
-                <tr className="table-secondary">
-                  <th colSpan="5" />
-                  <th style={{ minWidth: 110 }}>Tarifa/mes</th>
-                  <th style={{ minWidth: 110 }}>Instalación</th>
-                  <th style={{ minWidth: 110 }}>Depósito</th>
-                  <th style={{ minWidth: 110 }}>Op./día</th>
-                  <th />
+              <thead className="table-dark">
+                <tr className="align-middle">
+                  <th style={{ minWidth: 70, width: '5%' }}>Nro.</th>
+                  <th style={{ minWidth: 150, width: '15%' }}>Equipo</th>
+                  <th style={{ minWidth: 200, width: '25%' }}>Cliente Asignado</th>
+                  <th style={{ minWidth: 130, width: '15%' }}>Estado</th>
+                  <th style={{ minWidth: 150, width: '15%' }}>Fecha de Registro</th>
+                  <th style={{ minWidth: 220, width: '25%' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -497,172 +785,297 @@ export default function Eolicos() {
 
                   return (
                     <tr key={r.id_eolico}>
-                      <td>{nro}</td>
+                      {/* Número */}
+                      <td className="text-center">
+                        <span className="badge bg-light text-dark border">{nro}</span>
+                      </td>
+
+                      {/* Equipo - Código y estado de habilitación */}
                       <td>
-                        <div className="d-flex flex-column">
-                          <strong>{r.codigo}</strong>
-                          <small className="text-muted">
-                            Creado: {new Date(r.fecha_creacion).toLocaleString()}
-                          </small>
-                          <div>
-                            {r.habilitado ? (
-                              <span className="badge bg-success">Habilitado</span>
-                            ) : (
-                              <span className="badge bg-warning text-dark">No habilitado</span>
-                            )}
+                        <div className="d-flex flex-column gap-1">
+                          <div className="d-flex align-items-center gap-2">
+                            <i className="bi bi-wind text-primary fs-5"></i>
+                            <strong className="text-dark">{r.codigo}</strong>
+                          </div>
+                          {r.habilitado ? (
+                            <span className="badge bg-success-subtle text-success border border-success">
+                              <i className="bi bi-check-circle-fill me-1"></i>
+                              Habilitado
+                            </span>
+                          ) : (
+                            <span className="badge bg-warning-subtle text-warning border border-warning">
+                              <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                              No habilitado
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Cliente Asignado - Nombre y login */}
+                      <td>
+                        {asignado ? (
+                          <div className="d-flex flex-column gap-1">
+                            <div className="d-flex align-items-center gap-2">
+                              <i className="bi bi-person-circle text-success"></i>
+                              <span className="fw-semibold text-dark">{nombreUsuario(r)}</span>
+                            </div>
+                            <small className="text-muted">
+                              <i className="bi bi-at me-1"></i>
+                              {r.login || "Sin login"}
+                            </small>
+                          </div>
+                        ) : (
+                          <div className="text-muted fst-italic">
+                            <i className="bi bi-dash-circle me-1"></i>
+                            Sin cliente asignado
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Estado - Switch de activación */}
+                      <td>
+                        <div className="d-flex flex-column gap-2">
+                          <div className="form-check form-switch">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              role="switch"
+                              id={`sw-${r.id_eolico}`}
+                              checked={!!r.activo}
+                              onChange={() => toggle(r.id_eolico, !r.activo)}
+                              disabled={!asignado || busyToggle}
+                              title={!asignado ? "Primero asigna a un usuario" : r.activo ? "Desactivar" : "Activar"}
+                            />
+                            <label className="form-check-label" htmlFor={`sw-${r.id_eolico}`}>
+                              {busyToggle ? (
+                                <span className="text-muted">
+                                  <span className="spinner-border spinner-border-sm me-1"></span>
+                                  Guardando…
+                                </span>
+                              ) : r.activo ? (
+                                <span className="badge bg-success">
+                                  <i className="bi bi-power me-1"></i>
+                                  Activo
+                                </span>
+                              ) : (
+                                <span className="badge bg-secondary">
+                                  <i className="bi bi-power me-1"></i>
+                                  Inactivo
+                                </span>
+                              )}
+                            </label>
                           </div>
                         </div>
                       </td>
-                      <td className="text-break">
-                        <div className="fw-semibold">{nombreUsuario(r)}</div>
-                      </td>
-                      <td className="text-break">{r.login || "—"}</td>
+
+                      {/* Fecha de Registro */}
                       <td>
-                        <div className="form-check form-switch d-flex align-items-center gap-2">
-                          <input
-                            className="form-check-input"
-                            type="checkbox"
-                            role="switch"
-                            id={`sw-${r.id_eolico}`}
-                            checked={!!r.activo}
-                            onChange={() => toggle(r.id_eolico, !r.activo)}
-                            disabled={!asignado || busyToggle}
-                            title={!asignado ? "Primero asigna a un usuario" : r.activo ? "Desactivar" : "Activar"}
-                          />
-                          <label className="form-check-label small" htmlFor={`sw-${r.id_eolico}`}>
-                            {busyToggle ? "Guardando…" : r.activo ? "Activado" : "Desactivado"}
-                          </label>
+                        <div className="d-flex flex-column gap-1">
+                          <span className="text-dark">
+                            <i className="bi bi-calendar-check me-1"></i>
+                            {new Date(r.fecha_creacion).toLocaleDateString('es-BO', { 
+                              year: 'numeric', 
+                              month: 'short', 
+                              day: 'numeric' 
+                            })}
+                          </span>
+                          <small className="text-muted">
+                            <i className="bi bi-clock me-1"></i>
+                            {new Date(r.fecha_creacion).toLocaleTimeString('es-BO', { 
+                              hour: '2-digit', 
+                              minute: '2-digit' 
+                            })}
+                          </small>
                         </div>
                       </td>
 
-                      {/* Costos (4 columnas) */}
-                      <td className="text-nowrap">{money(r.tarifa_mes)}</td>
-                      <td className="text-nowrap">{money(r.costo_instalacion)}</td>
-                      <td className="text-nowrap">{money(r.deposito)}</td>
-                      <td className="text-nowrap">{money(r.costo_operativo_dia)}</td>
-
-                      {/* Acciones */}
- {/* Acciones */}
-<td>
-  <div className="d-flex flex-column align-items-center gap-2">
-    {/* Fila 1: acciones principales */}
-    <div className="d-flex flex-wrap justify-content-center gap-2">
-      {/* Editar costos */}
-      <button className="btn btn-sm btn-primary" onClick={() => abrirEditarCostos(r)}>
-        Editar costos
-      </button>
-
-      {/* Recibo PDF (equipo) */}
-      <button
-        className="btn btn-sm btn-warning ms-2"
-        onClick={() => rotarKey(r.id_eolico)}
-        title="Rotar device_key"
-      >
-        Rotar clave
-      </button>
-      <button
-        className="btn btn-sm btn-outline-dark"
-        onClick={() => {
-          (async () => {
-            try {
-              setRowBusy(r.id_eolico, "pdf");
-              const token = localStorage.getItem("token") || "";
-              const base = api.defaults.baseURL || "";
-              const url = `${base}/eolicos/${r.id_eolico}/recibo`;
-              const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-              if (!resp.ok) {
-                const txt = await resp.text();
-                throw new Error(txt || "No se pudo generar el PDF");
-              }
-              const blob = await resp.blob();
-              const blobUrl = window.URL.createObjectURL(blob);
-              const win = window.open(blobUrl, "_blank");
-              if (!win) {
-                const a = document.createElement("a");
-                a.href = blobUrl;
-                a.download = `recibo_${r.codigo || r.id_eolico}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-              }
-              setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-            } catch (e) {
-              console.error("abrirRecibo error:", e);
-              alert("No se pudo abrir el recibo PDF.");
-            } finally {
-              clearRowBusy(r.id_eolico);
-            }
-          })();
-        }}
-        disabled={isBusy(r.id_eolico, "pdf")}
-        title="Abrir/descargar PDF del recibo"
-      >
-        {isBusy(r.id_eolico, "pdf") ? "Generando…" : "Recibo PDF"}
-      </button>
-
-      {/* Ver cuotas */}
-      <button
-        className="btn btn-sm btn-outline-primary"
-        onClick={() => verCuotas(r.id_eolico)}
-        disabled={isBusy(r.id_eolico, "cuotas-lista")}
-        title="Ver plan de cuotas del alquiler activo"
-      >
-        {isBusy(r.id_eolico, "cuotas-lista") ? "Cargando…" : "Ver cuotas"}
-      </button>
-
-      {/* Generar plan de cuotas */}
-      <button
-        className="btn btn-sm btn-outline-success"
-        onClick={() => abrirGenerarPlan(r)}
-        disabled={isBusy(r.id_eolico, "cuotas-generar")}
-        title="Generar plan de cuotas"
-      >
-        {isBusy(r.id_eolico, "cuotas-generar") ? "Generando…" : "Generar cuotas"}
-      </button>
-
-      {/* Cuotas PDF */}
-      <button
-        className="btn btn-sm btn-outline-dark"
-        onClick={() => abrirPDFCuotas(r.id_eolico, r.codigo)}
-        disabled={isBusy(r.id_eolico, "cuotas-pdf")}
-        title="Descargar/abrir PDF del plan de cuotas"
-      >
-        {isBusy(r.id_eolico, "cuotas-pdf") ? "Generando…" : "Cuotas PDF"}
-      </button>
-    </div>
-
-    {/* Fila 2: asignación */}
-    <div className="d-flex flex-wrap justify-content-center align-items-center gap-2">
-      <div className="input-group input-group-sm" style={{ maxWidth: 260 }}>
-        <span className="input-group-text">Asignar</span>
-        <select
-          className="form-select"
-          value={r.usuario_id || ""}
-          onChange={(e) => {
-            const uid = Number(e.target.value || 0);
-            if (uid > 0) asignar(r.id_eolico, uid);
-          }}
-          disabled={isBusy(r.id_eolico, "asignar")}
-        >
-          <option value="">— seleccionar —</option>
-          {usuarios.map((u) => (
-            <option key={u.id_usuario} value={u.id_usuario}>
-              {`${[u.nombres, u.primer_apellido].filter(Boolean).join(" ") || u.usuario}${
-                userIdParam === u.id_usuario ? " ★" : ""
-              }`}
-            </option>
-          ))}
-        </select>
+                      {/* Acciones - Rediseño UX Mejorado */}
+<td style={{ minWidth: 220, maxWidth: 250 }}>
+  <div className="d-flex flex-column align-items-stretch gap-2">
+    
+    {/* Estado del equipo - Badge compacto */}
+    {asignado ? (
+      <div className="badge bg-success text-truncate" title={`Asignado a: ${nombreUsuario(r)}`}>
+        <i className="bi bi-check-circle me-1"></i>
+        {nombreUsuario(r).length > 20 ? nombreUsuario(r).substring(0, 20) + '...' : nombreUsuario(r)}
       </div>
+    ) : (
+      <div className="badge bg-secondary">
+        <i className="bi bi-dash-circle me-1"></i>
+        Sin asignar
+      </div>
+    )}
 
+    {/* Botón principal de asignación/cambio */}
+    {!asignado ? (
       <button
-        className="btn btn-sm btn-outline-secondary"
-        onClick={() => desasignar(r.id_eolico)}
-        disabled={!asignado || isBusy(r.id_eolico, "desasignar")}
+        className="btn btn-success btn-sm"
+        onClick={() => abrirModalAlquiler(r)}
+        disabled={isBusy(r.id_eolico, "asignar")}
+        title="Asignar equipo y crear alquiler"
+        style={{ fontSize: '0.85rem', padding: '0.4rem 0.6rem' }}
       >
+        <i className="bi bi-person-plus-fill me-1"></i>
+        {isBusy(r.id_eolico, "asignar") ? "Procesando…" : "Asignar"}
+      </button>
+    ) : (
+      <button
+        className="btn btn-warning btn-sm text-dark"
+        onClick={() => desasignar(r.id_eolico)}
+        disabled={isBusy(r.id_eolico, "desasignar")}
+        title="Desasignar equipo del usuario"
+        style={{ fontSize: '0.85rem', padding: '0.4rem 0.6rem' }}
+      >
+        <i className="bi bi-person-dash-fill me-1"></i>
         {isBusy(r.id_eolico, "desasignar") ? "Procesando…" : "Desasignar"}
       </button>
+    )}
+
+    {/* Dropdown de Acciones */}
+    <div className="dropdown">
+      <button
+        className="btn btn-outline-primary btn-sm dropdown-toggle w-100"
+        type="button"
+        id={`dropdown-${r.id_eolico}`}
+        data-bs-toggle="dropdown"
+        aria-expanded="false"
+        style={{ fontSize: '0.85rem', padding: '0.4rem 0.6rem' }}
+      >
+        <i className="bi bi-gear-fill me-1"></i>
+        Acciones
+      </button>
+      <ul className="dropdown-menu" aria-labelledby={`dropdown-${r.id_eolico}`}>
+        
+        {/* Sección: Gestión de Alquiler */}
+        <li><h6 className="dropdown-header"><i className="bi bi-house-door me-1"></i> Gestión de Alquiler</h6></li>
+        <li>
+          <button
+            className="dropdown-item"
+            onClick={() => abrirEditarCostos(r)}
+          >
+            <i className="bi bi-cash-coin me-2"></i>
+            Editar Costos
+          </button>
+        </li>
+        {asignado && (
+          <li>
+            <button
+              className="dropdown-item"
+              onClick={() => abrirModalCambiarUsuario(r)}
+            >
+              <i className="bi bi-arrow-left-right me-2"></i>
+              Cambiar Usuario
+            </button>
+          </li>
+        )}
+        
+        <li><hr className="dropdown-divider" /></li>
+        
+        {/* Sección: Cuotas y Pagos */}
+        <li><h6 className="dropdown-header"><i className="bi bi-cash-stack me-1"></i> Cuotas y Pagos</h6></li>
+        <li>
+          <button
+            className="dropdown-item"
+            onClick={() => verCuotas(r.id_eolico)}
+            disabled={isBusy(r.id_eolico, "cuotas-lista")}
+          >
+            <i className="bi bi-list-check me-2"></i>
+            {isBusy(r.id_eolico, "cuotas-lista") ? "Cargando…" : "Ver Cuotas"}
+          </button>
+        </li>
+        <li>
+          <button
+            className="dropdown-item"
+            onClick={() => abrirGenerarPlan(r)}
+            disabled={isBusy(r.id_eolico, "cuotas-generar")}
+          >
+            <i className="bi bi-calendar-plus me-2"></i>
+            {isBusy(r.id_eolico, "cuotas-generar") ? "Generando…" : "Generar Plan de Cuotas"}
+          </button>
+        </li>
+        <li>
+          <button
+            className="dropdown-item"
+            onClick={() => abrirRegistrarPago(r)}
+            disabled={!asignado}
+          >
+            <i className="bi bi-credit-card me-2"></i>
+            Registrar Pago
+          </button>
+        </li>
+        
+        <li><hr className="dropdown-divider" /></li>
+        
+        {/* Sección: Documentos */}
+        <li><h6 className="dropdown-header"><i className="bi bi-file-earmark-pdf me-1"></i> Documentos</h6></li>
+        <li>
+          <button
+            className="dropdown-item"
+            onClick={() => {
+              (async () => {
+                try {
+                  setRowBusy(r.id_eolico, "pdf");
+                  const token = localStorage.getItem("token") || "";
+                  const base = api.defaults.baseURL || "";
+                  const url = `${base}/eolicos/${r.id_eolico}/recibo`;
+                  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+                  if (!resp.ok) {
+                    const txt = await resp.text();
+                    throw new Error(txt || "No se pudo generar el PDF");
+                  }
+                  const blob = await resp.blob();
+                  const blobUrl = window.URL.createObjectURL(blob);
+                  const win = window.open(blobUrl, "_blank");
+                  if (!win) {
+                    const a = document.createElement("a");
+                    a.href = blobUrl;
+                    a.download = `recibo_${r.codigo || r.id_eolico}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                  }
+                  setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+                } catch (e) {
+                  console.error("abrirRecibo error:", e);
+                  alert("No se pudo abrir el recibo PDF.");
+                } finally {
+                  clearRowBusy(r.id_eolico);
+                }
+              })();
+            }}
+            disabled={isBusy(r.id_eolico, "pdf")}
+          >
+            <i className="bi bi-receipt me-2"></i>
+            {isBusy(r.id_eolico, "pdf") ? "Generando…" : "Recibo de Pago (PDF)"}
+          </button>
+        </li>
+        <li>
+          <button
+            className="dropdown-item"
+            onClick={() => abrirPDFCuotas(r.id_eolico, r.codigo)}
+            disabled={isBusy(r.id_eolico, "cuotas-pdf")}
+          >
+            <i className="bi bi-file-pdf me-2"></i>
+            {isBusy(r.id_eolico, "cuotas-pdf") ? "Generando…" : "Plan de Cuotas (PDF)"}
+          </button>
+        </li>
+        
+        <li><hr className="dropdown-divider" /></li>
+        
+        {/* Sección: Configuración */}
+        <li><h6 className="dropdown-header"><i className="bi bi-tools me-1"></i> Configuración</h6></li>
+        <li>
+          <button
+            className="dropdown-item"
+            onClick={() => rotarKey(r.id_eolico)}
+          >
+            <i className="bi bi-key me-2"></i>
+            Rotar Clave Dispositivo
+          </button>
+        </li>
+      </ul>
     </div>
+
   </div>
 </td>
 
@@ -672,8 +1085,19 @@ export default function Eolicos() {
 
                 {listaFiltrada.length === 0 && !cargando && (
                   <tr>
-                    <td colSpan="10" className="text-center text-muted">
-                      No hay equipos para mostrar.
+                    <td colSpan="6" className="text-center py-5">
+                      <div className="d-flex flex-column align-items-center gap-3">
+                        <i className="bi bi-inbox display-1 text-muted"></i>
+                        <h5 className="text-muted">No hay equipos registrados</h5>
+                        <p className="text-muted">Comienza creando un nuevo equipo eólico</p>
+                        <button 
+                          className="btn btn-primary"
+                          onClick={() => setOpenNuevo(true)}
+                        >
+                          <i className="bi bi-plus-circle me-2"></i>
+                          Crear Primer Equipo
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -1037,13 +1461,43 @@ export default function Eolicos() {
                         )}
                       </td>
                       <td>
-                        <button
-                          className="btn btn-sm btn-outline-success"
-                          disabled={!!c.pagado || pagandoId === c.id_cuota}
-                          onClick={() => pagarCuota(c.id_cuota)}
-                        >
-                          {pagandoId === c.id_cuota ? "Guardando…" : c.pagado ? "Listo" : "Pagar"}
-                        </button>
+                        {c.pagado ? (
+                          <button
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={async () => {
+                              try {
+                                // Descargar el PDF de la cuota específica usando Axios
+                                const response = await api.get(`/cuotas/${c.id_cuota}/recibo`, {
+                                  responseType: 'blob'
+                                });
+                                
+                                // Crear un blob URL y abrirlo en nueva pestaña
+                                const blob = new Blob([response.data], { type: 'application/pdf' });
+                                const url = URL.createObjectURL(blob);
+                                const newWindow = window.open(url, '_blank');
+                                
+                                // Liberar el blob URL después de un tiempo
+                                if (newWindow) {
+                                  setTimeout(() => URL.revokeObjectURL(url), 10000);
+                                }
+                              } catch (e) {
+                                console.error("Error al abrir PDF:", e);
+                                showBackendError(e, "No se pudo abrir el recibo PDF.");
+                              }
+                            }}
+                            title="Descargar recibo de esta cuota"
+                          >
+                            <i className="bi bi-file-earmark-pdf"></i> PDF
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-sm btn-outline-success"
+                            disabled={pagandoId === c.id_cuota}
+                            onClick={() => pagarCuota(c.id_cuota)}
+                          >
+                            {pagandoId === c.id_cuota ? "Guardando…" : "Pagar"}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -1094,6 +1548,373 @@ export default function Eolicos() {
           </>
         )}
       </Modal>
+
+      {/* ============================================ */}
+      {/* Modal: Asignar y Crear Alquiler (NUEVO)     */}
+      {/* ============================================ */}
+      <Modal
+        open={openModalAlquiler}
+        title={`🏠 Crear Alquiler - Equipo ${equipoAlquiler?.codigo || ""}`}
+        onClose={() => setOpenModalAlquiler(false)}
+        footer={
+          <>
+            <button
+              className="btn btn-success"
+              onClick={crearAlquiler}
+              disabled={procesandoAlquiler}
+            >
+              {procesandoAlquiler ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-check-circle me-1"></i>
+                  Crear Alquiler
+                </>
+              )}
+            </button>
+          </>
+        }
+      >
+        {equipoAlquiler && (
+          <div className="row g-3">
+            
+            {/* Información del equipo */}
+            <div className="col-12">
+              <div className="alert alert-info">
+                <h6 className="alert-heading mb-2">
+                  <i className="bi bi-info-circle me-1"></i>
+                  Información del Equipo
+                </h6>
+                <div className="row">
+                  <div className="col-6"><strong>Código:</strong> {equipoAlquiler.codigo}</div>
+                  <div className="col-6"><strong>Estado:</strong> {equipoAlquiler.habilitado ? "✓ Habilitado" : "✗ Deshabilitado"}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Selección de usuario */}
+            <div className="col-12">
+              <label className="form-label fw-bold">
+                <i className="bi bi-person me-1"></i>
+                Cliente
+                <span className="text-danger">*</span>
+              </label>
+              <select
+                className="form-select"
+                value={alquilerForm.usuario_id}
+                onChange={(e) => setAlquilerForm({...alquilerForm, usuario_id: e.target.value})}
+                required
+              >
+                <option value="">— Seleccionar cliente —</option>
+                {usuarios.map((u) => (
+                  <option key={u.id_usuario} value={u.id_usuario}>
+                    {[u.nombres, u.primer_apellido, u.segundo_apellido].filter(Boolean).join(" ") || u.usuario}
+                    {" - "}
+                    {u.ci || "Sin CI"}
+                  </option>
+                ))}
+              </select>
+              <small className="text-muted">
+                Si el cliente no existe, créalo primero en el módulo de Usuarios
+              </small>
+            </div>
+
+            {/* Costos */}
+            <div className="col-12">
+              <div className="card bg-light">
+                <div className="card-header bg-primary text-white">
+                  <i className="bi bi-cash-coin me-1"></i>
+                  Costos del Alquiler
+                </div>
+                <div className="card-body">
+                  <div className="row g-3">
+                    
+                    <div className="col-md-6">
+                      <label className="form-label">
+                        <i className="bi bi-tools me-1"></i>
+                        Costo de Instalación (Bs)
+                      </label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        value={alquilerForm.costo_instalacion}
+                        onChange={(e) => setAlquilerForm({...alquilerForm, costo_instalacion: Number(e.target.value) || 0})}
+                        min="0"
+                        step="10"
+                      />
+                      <small className="text-muted">Costo estándar: Bs 300</small>
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label">
+                        <i className="bi bi-calendar-month me-1"></i>
+                        Tarifa Mensual (Bs)
+                      </label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        value={alquilerForm.tarifa_mensual}
+                        onChange={(e) => setAlquilerForm({...alquilerForm, tarifa_mensual: Number(e.target.value) || 0})}
+                        min="0"
+                        step="10"
+                      />
+                      <small className="text-muted">Costo estándar: Bs 50/mes</small>
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label">
+                        <i className="bi bi-piggy-bank me-1"></i>
+                        Depósito en Garantía (Bs)
+                      </label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        value={alquilerForm.deposito}
+                        onChange={(e) => setAlquilerForm({...alquilerForm, deposito: Number(e.target.value) || 0})}
+                        min="0"
+                        step="10"
+                      />
+                      <small className="text-muted">Opcional</small>
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label">
+                        <i className="bi bi-calendar-event me-1"></i>
+                        Fecha de Inicio
+                      </label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={alquilerForm.fecha_inicio}
+                        onChange={(e) => setAlquilerForm({...alquilerForm, fecha_inicio: e.target.value})}
+                      />
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Resumen del primer pago */}
+            <div className="col-12">
+              <div className="alert alert-success">
+                <h6 className="alert-heading mb-2">
+                  <i className="bi bi-receipt me-1"></i>
+                  Primer Pago (A cobrar hoy + 7 días)
+                </h6>
+                <div className="row">
+                  <div className="col-6">Instalación:</div>
+                  <div className="col-6 text-end"><strong>Bs {Number(alquilerForm.costo_instalacion).toFixed(2)}</strong></div>
+                  
+                  <div className="col-6">Primer Mes:</div>
+                  <div className="col-6 text-end"><strong>Bs {Number(alquilerForm.tarifa_mensual).toFixed(2)}</strong></div>
+                  
+                  <div className="col-12"><hr /></div>
+                  
+                  <div className="col-6"><strong>TOTAL:</strong></div>
+                  <div className="col-6 text-end">
+                    <strong className="fs-5 text-success">
+                      Bs {(Number(alquilerForm.costo_instalacion) + Number(alquilerForm.tarifa_mensual)).toFixed(2)}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Opciones */}
+            <div className="col-12">
+              <div className="form-check form-switch">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  id="generarCuotasAuto"
+                  checked={alquilerForm.generar_cuotas}
+                  onChange={(e) => setAlquilerForm({...alquilerForm, generar_cuotas: e.target.checked})}
+                />
+                <label className="form-check-label" htmlFor="generarCuotasAuto">
+                  <i className="bi bi-calendar-check me-1"></i>
+                  Generar cuotas automáticamente
+                  <br />
+                  <small className="text-muted">
+                    Se creará la primera cuota (instalación + primer mes) y 12 cuotas mensuales posteriores
+                  </small>
+                </label>
+              </div>
+            </div>
+
+          </div>
+        )}
+      </Modal>
+
+      {/* ============================================ */}
+      {/* Modal: Registrar Pago (NUEVO)               */}
+      {/* ============================================ */}
+      <Modal
+        open={openModalPago}
+        title={`💰 Registrar Pago - ${equipoPago?.codigo || ""}`}
+        onClose={() => setOpenModalPago(false)}
+        footer={
+          <>
+            <button
+              className="btn btn-success"
+              onClick={registrarPago}
+              disabled={procesandoPago}
+            >
+              {procesandoPago ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-check-circle me-1"></i>
+                  Registrar y Generar Recibo
+                </>
+              )}
+            </button>
+          </>
+        }
+      >
+        {equipoPago && (
+          <div className="row g-3">
+            
+            <div className="col-12">
+              <div className="alert alert-info">
+                <strong>Cliente:</strong> {nombreUsuario(equipoPago)}
+                <br />
+                <strong>Equipo:</strong> {equipoPago.codigo}
+              </div>
+            </div>
+
+            <div className="col-md-6">
+              <label className="form-label fw-bold">
+                Monto (Bs)
+                <span className="text-danger">*</span>
+              </label>
+              <input
+                type="number"
+                className="form-control"
+                value={pagoForm.monto}
+                onChange={(e) => setPagoForm({...pagoForm, monto: e.target.value})}
+                min="0"
+                step="0.01"
+                required
+              />
+            </div>
+
+            <div className="col-md-6">
+              <label className="form-label fw-bold">
+                Método de Pago
+              </label>
+              <select
+                className="form-select"
+                value={pagoForm.metodo_pago}
+                onChange={(e) => setPagoForm({...pagoForm, metodo_pago: e.target.value})}
+              >
+                <option value="efectivo">💵 Efectivo</option>
+                <option value="transferencia">🏦 Transferencia</option>
+                <option value="qr">📱 QR</option>
+              </select>
+            </div>
+
+            <div className="col-12">
+              <label className="form-label">
+                Observaciones
+              </label>
+              <textarea
+                className="form-control"
+                rows="3"
+                value={pagoForm.observaciones}
+                onChange={(e) => setPagoForm({...pagoForm, observaciones: e.target.value})}
+                placeholder="Opcional: agregar notas sobre el pago"
+              />
+            </div>
+
+            <div className="col-12">
+              <div className="alert alert-warning">
+                <i className="bi bi-info-circle me-1"></i>
+                Se marcará como pagada la siguiente cuota pendiente y se generará el recibo PDF automáticamente
+              </div>
+            </div>
+
+          </div>
+        )}
+      </Modal>
+
+      {/* ============================================ */}
+      {/* Modal: Cambiar Usuario (NUEVO)              */}
+      {/* ============================================ */}
+      <Modal
+        open={openModalCambioUsuario}
+        title={`↔️ Cambiar Usuario - ${equipoCambio?.codigo || ""}`}
+        onClose={() => setOpenModalCambioUsuario(false)}
+        footer={
+          <>
+            <button
+              className="btn btn-primary"
+              onClick={cambiarUsuario}
+              disabled={!nuevoUsuarioId}
+            >
+              <i className="bi bi-arrow-left-right me-1"></i>
+              Cambiar Usuario
+            </button>
+          </>
+        }
+      >
+        {equipoCambio && (
+          <div className="row g-3">
+            
+            <div className="col-12">
+              <div className="alert alert-warning">
+                <h6 className="alert-heading">
+                  <i className="bi bi-exclamation-triangle me-1"></i>
+                  Usuario Actual
+                </h6>
+                <strong>{nombreUsuario(equipoCambio)}</strong>
+                <br />
+                <small>Login: {equipoCambio.login}</small>
+              </div>
+            </div>
+
+            <div className="col-12">
+              <label className="form-label fw-bold">
+                Nuevo Usuario
+                <span className="text-danger">*</span>
+              </label>
+              <select
+                className="form-select"
+                value={nuevoUsuarioId}
+                onChange={(e) => setNuevoUsuarioId(e.target.value)}
+                required
+              >
+                <option value="">— Seleccionar nuevo usuario —</option>
+                {usuarios
+                  .filter(u => u.id_usuario !== equipoCambio.usuario_id)
+                  .map((u) => (
+                    <option key={u.id_usuario} value={u.id_usuario}>
+                      {[u.nombres, u.primer_apellido, u.segundo_apellido].filter(Boolean).join(" ") || u.usuario}
+                      {" - "}
+                      {u.ci || "Sin CI"}
+                    </option>
+                  ))
+                }
+              </select>
+            </div>
+
+            <div className="col-12">
+              <div className="alert alert-info">
+                <i className="bi bi-info-circle me-1"></i>
+                El historial de cuotas se mantendrá. Este cambio solo actualiza el usuario asignado al equipo.
+              </div>
+            </div>
+
+          </div>
+        )}
+      </Modal>
+
     </div>
   );
 }

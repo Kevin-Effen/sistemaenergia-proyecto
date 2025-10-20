@@ -1524,11 +1524,10 @@ app.get('/eolicos/:id/recibo', requireAuth, requireRole('administrador'), (req, 
     SELECT 
       e.id_eolico, e.codigo, e.activo, e.habilitado, e.fecha_creacion,
       e.tarifa_mes, e.costo_instalacion, e.deposito, e.costo_operativo_dia,
-      u.nombres, u.primer_apellido, u.segundo_apellido, c.usuario AS login,
+      u.nombres, u.primer_apellido, u.segundo_apellido,
       a.id_alquiler, a.fecha_inicio, a.estado
     FROM eolicos e
     LEFT JOIN usuarios u ON u.id_usuario = e.usuario_id
-    LEFT JOIN cuentas  c ON c.id_cuenta   = u.cuenta_id
     LEFT JOIN alquileres a ON a.eolico_id = e.id_eolico AND a.estado='activo'
     WHERE e.id_eolico=? LIMIT 1
   `;
@@ -1560,9 +1559,7 @@ app.get('/eolicos/:id/recibo', requireAuth, requireRole('administrador'), (req, 
 
     const MARGIN = 40;
     const HEADER_H = 92;
-    const BOX_H = 88;
-    const ROW_H = 26;
-    const GAP = 14;
+    const BOX_H = 70; // Reducido de 88 a 70
 
     const doc = new PDFDocument({ margin: MARGIN, size: 'A4' });
     doc.pipe(res);
@@ -1594,8 +1591,8 @@ app.get('/eolicos/:id/recibo', requireAuth, requireRole('administrador'), (req, 
     doc.moveDown(2);
 
     // Título
-    doc.font('Helvetica-Bold').fontSize(16).fillColor('#E3F2FD').text('RECIBO / DETALLE DE EQUIPO');
-    doc.moveDown(0.2);
+    doc.font('Helvetica-Bold').fontSize(16).fillColor('#000000').text('RECIBO DE PAGO - ALQUILER');
+    doc.moveDown(0.3);
 
     // Meta
     const yMeta = doc.y + 4;
@@ -1609,17 +1606,13 @@ app.get('/eolicos/:id/recibo', requireAuth, requireRole('administrador'), (req, 
     doc.moveDown(3);
 
     // Cajas Cliente y Equipo
+    const GAP = 14;
     const yBoxes = yMeta + 50 + GAP;
     doc.roundedRect(MARGIN, yBoxes, (W - MARGIN * 2) / 2 - 6, BOX_H, 6).stroke('#CFD8DC');
     doc.roundedRect(MARGIN + (W - MARGIN * 2) / 2 + 6, yBoxes, (W - MARGIN * 2) / 2 - 6, BOX_H, 6).stroke('#CFD8DC');
 
     doc.font('Helvetica-Bold').fontSize(12).text('Cliente', MARGIN + 8, yBoxes + 8);
-    doc.font('Helvetica').fontSize(11).text(`Nombre: ${nombreCliente}`, MARGIN + 8, yBoxes + 28, { lineGap: 3 }).text(
-      `Login: ${r.login || '—'}`,
-      MARGIN + 8,
-      yBoxes + 48,
-      { lineGap: 3 }
-    );
+    doc.font('Helvetica').fontSize(11).text(`Nombre: ${nombreCliente}`, MARGIN + 8, yBoxes + 28, { lineGap: 3 });
 
     doc.font('Helvetica-Bold').fontSize(12).text('Equipo', MARGIN + (W - MARGIN * 2) / 2 + 14, yBoxes + 8);
     doc.font('Helvetica').fontSize(11).text(`Creado: ${fechaL(r.fecha_creacion)}`, MARGIN + (W - MARGIN * 2) / 2 + 14, yBoxes + 28, {
@@ -1627,77 +1620,266 @@ app.get('/eolicos/:id/recibo', requireAuth, requireRole('administrador'), (req, 
     }).text(`Nro: ${r.id_eolico}`, MARGIN + (W - MARGIN * 2) / 2 + 14, yBoxes + 48, { lineGap: 3 });
 
     // Posicionar cursor
-    doc.y = yBoxes + BOX_H + GAP;
-
-    // Tabla de costos
-    doc.font('Helvetica-Bold').fontSize(12).text('Costos vigentes', MARGIN, doc.y);
-    doc.moveDown(0.4);
-
-    let y = doc.y;
-    const c1 = MARGIN + 8,
-      c2 = MARGIN + 240,
-      c3 = doc.page.width - MARGIN - 8 - 140;
-
-    doc.rect(MARGIN, y, W - MARGIN * 2, ROW_H).fill('#ECEFF1').stroke('#E0E0E0');
-    doc.fillColor('#333').font('Helvetica-Bold').fontSize(10).text('Concepto', c1, y + 7).text('Detalle', c2, y + 7).text('Monto (Bs.)', c3, y + 7, {
-      width: 140,
-      align: 'right',
-    });
-    doc.fillColor('#000');
-    y += ROW_H;
-
-    const fila = (concepto, detalle, monto) => {
-      doc.rect(MARGIN, y, W - MARGIN * 2, ROW_H).stroke('#EEEEEE');
-      doc.font('Helvetica').fontSize(10).text(concepto, c1, y + 7).text(detalle, c2, y + 7).text(dinero(monto), c3, y + 7, {
-        width: 140,
-        align: 'right',
-      });
-      y += ROW_H;
-    };
-
-    fila('Tarifa mensual', 'Uso del sistema eólico', r.tarifa_mes);
-    fila('Instalación', 'Instalación y puesta en marcha', r.costo_instalacion);
-    fila('Depósito', 'Garantía reembolsable', r.deposito);
-    fila('Costo operativo/día', 'Mantenimiento/operación', r.costo_operativo_dia);
-
-    // Total
-    y += 10;
-    doc.font('Helvetica-Bold').fontSize(11).text('Total inicial estimado', c2, y, { width: c3 - c2 - 8, align: 'right' });
-    doc.font('Helvetica-Bold').fontSize(11).text(dinero(totalInicial), c3, y, { width: 140, align: 'right' });
-    y += 32;
+    doc.y = yBoxes + BOX_H + GAP + 10;
 
     // Alquiler activo
-    doc.moveTo(MARGIN, y).lineTo(W - MARGIN, y).stroke('#DDDDDD');
-    y += 12;
-    doc.font('Helvetica-Bold').fontSize(12).text('Alquiler activo', MARGIN, y);
+    let y = doc.y;
+    doc.font('Helvetica-Bold').fontSize(12).text('Información del Alquiler', MARGIN, y);
     y += 22;
-    doc.font('Helvetica').fontSize(11);
+    
+    doc.roundedRect(MARGIN, y, W - MARGIN * 2, 50, 6).fill('#F5F5F5').stroke('#CFD8DC');
+    
+    doc.font('Helvetica').fontSize(11).fillColor('#000');
     if (r.id_alquiler) {
-      doc.text(`Nro. de alquiler: ${r.id_alquiler}`, MARGIN, y, { lineGap: 3 }).text(`Inicio: ${fechaL(r.fecha_inicio)}`, MARGIN + 220, y, {
-        lineGap: 3,
-      });
+      doc.text(`Nro. de alquiler: ${r.id_alquiler}`, MARGIN + 12, y + 12, { lineGap: 4 });
+      doc.text(`Fecha de inicio: ${fechaL(r.fecha_inicio)}`, MARGIN + 12, y + 28, { lineGap: 4 });
     } else {
-      doc.text('No existe un alquiler activo para este equipo.', MARGIN, y);
+      doc.text('No existe un alquiler activo para este equipo.', MARGIN + 12, y + 20);
     }
-    y += 34;
+    
+    y += 70;
+
+    // Detalle del Total
+    doc.moveTo(MARGIN, y).lineTo(W - MARGIN, y).stroke('#DDDDDD');
+    y += 15;
+    
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#000').text('Detalle del Pago', MARGIN, y);
+    y += 20;
+    
+    // Función auxiliar para mostrar línea de detalle
+    const mostrarDetalle = (concepto, monto, descripcion = '') => {
+      if (Number(monto) > 0) {
+        doc.font('Helvetica').fontSize(10).fillColor('#333');
+        doc.text(concepto, MARGIN + 10, y, { width: 200 });
+        if (descripcion) {
+          doc.font('Helvetica').fontSize(9).fillColor('#666').text(descripcion, MARGIN + 10, y + 12, { width: 200 });
+        }
+        doc.font('Helvetica').fontSize(10).fillColor('#000').text(dinero(monto), W - MARGIN - 120, y, { width: 120, align: 'right' });
+        y += descripcion ? 30 : 22;
+      }
+    };
+    
+    // Mostrar cada concepto solo si tiene valor
+    mostrarDetalle('Tarifa mensual', r.tarifa_mes, 'Uso del sistema eólico');
+    mostrarDetalle('Instalación', r.costo_instalacion, 'Instalación y puesta en marcha');
+    mostrarDetalle('Depósito', r.deposito, 'Garantía reembolsable');
+    
+    // Línea separadora antes del total
+    y += 5;
+    doc.moveTo(MARGIN, y).lineTo(W - MARGIN, y).stroke('#DDDDDD');
+    y += 15;
+    
+    // Total destacado
+    doc.font('Helvetica-Bold').fontSize(14).fillColor('#000').text('TOTAL A PAGAR:', MARGIN, y);
+    doc.font('Helvetica-Bold').fontSize(14).text(dinero(totalInicial), W - MARGIN - 150, y, { width: 150, align: 'right' });
+    
+    y += 35;
 
     // Observaciones
     doc.font('Helvetica').fontSize(10).fillColor('#555').text(
-      'Observaciones: Este documento es generado automáticamente por el sistema. Los costos pueden variar según contrato y condiciones particulares.',
+      'Observaciones: Este documento es un comprobante de pago del alquiler. Los montos pueden variar según contrato y condiciones particulares.',
       MARGIN,
       y,
       { width: W - MARGIN * 2, lineGap: 2 }
     );
 
+    y += 50;
+
     // Firmas
-    const fy = doc.page.height - 120;
+    const fy = y + 20;
     doc.fillColor('#000').moveTo(MARGIN + 20, fy).lineTo(MARGIN + 220, fy).stroke('#424242');
     doc.font('Helvetica').fontSize(10).text('Recibí conforme', MARGIN + 20, fy + 6, { width: 200, align: 'center' });
     doc.moveTo(W - (MARGIN + 220), fy).lineTo(W - (MARGIN + 20), fy).stroke('#424242');
     doc.font('Helvetica').fontSize(10).text('Entregué conforme', W - (MARGIN + 220), fy + 6, { width: 200, align: 'center' });
 
     // Pie
-    doc.fontSize(9).fillColor('#777').text('Documento generado por el Sistema de Energía Eólica', MARGIN, doc.page.height - 40, {
+    const footerY = fy + 40;
+    doc.fontSize(9).fillColor('#777').text('Documento generado por el Sistema de Energía Eólica', MARGIN, footerY, {
+      width: W - MARGIN * 2,
+      align: 'center',
+    });
+
+    doc.end();
+  });
+});
+
+// =========================================================
+// Recibo de cuota individual (para cuotas mensuales)
+// =========================================================
+app.get('/cuotas/:id/recibo', requireAuth, requireRole('administrador'), [param('id').isInt({ min: 1 })], (req, res) => {
+  const id_cuota = Number(req.params.id);
+
+  const sql = `
+    SELECT 
+      c.id_cuota, c.numero, c.concepto, c.descripcion, c.monto, 
+      c.fecha_vencimiento, c.fecha_pago, c.pagado, c.metodo_pago, c.observaciones,
+      e.id_eolico, e.codigo AS equipo_codigo,
+      u.nombres, u.primer_apellido, u.segundo_apellido,
+      a.id_alquiler, a.fecha_inicio
+    FROM cuotas c
+    JOIN alquileres a ON a.id_alquiler = c.alquiler_id
+    JOIN eolicos e ON e.id_eolico = a.eolico_id
+    JOIN usuarios u ON u.id_usuario = a.usuario_id
+    WHERE c.id_cuota = ?
+    LIMIT 1
+  `;
+
+  db.query(sql, [id_cuota], (err, rows) => {
+    if (err) return res.status(500).json({ mensaje: 'Error en servidor' });
+    if (!rows || !rows.length) return res.status(404).json({ mensaje: 'Cuota no encontrada' });
+
+    const cuota = rows[0];
+
+    // Validar que la cuota esté pagada
+    if (!cuota.pagado) {
+      return res.status(400).json({ mensaje: 'Esta cuota aún no ha sido pagada' });
+    }
+
+    const dinero = (v) =>
+      Number(v || 0).toLocaleString('es-BO', { style: 'currency', currency: 'BOB', minimumFractionDigits: 2 });
+    const fechaL = (d) => new Date(d).toLocaleString('es-BO');
+    const fechaCorta = (d) => new Date(d).toLocaleDateString('es-BO');
+    const nombreCliente = [cuota.nombres, cuota.primer_apellido, cuota.segundo_apellido].filter(Boolean).join(' ') || '—';
+
+    // Calcular el mes al que corresponde la cuota
+    const fechaVencimiento = new Date(cuota.fecha_vencimiento);
+    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const mesNombre = meses[fechaVencimiento.getMonth()];
+    const anio = fechaVencimiento.getFullYear();
+    const periodoMes = `${mesNombre} ${anio}`;
+
+    const EMP = {
+      nombre: process.env.RECIBO_EMPRESA || 'Sistema de Energía Eólica',
+      direccion: process.env.RECIBO_DIRECCION || 'Calle Manuel Virreira, Cochabamba',
+      telefono: process.env.RECIBO_TELEFONO || '+591 69529957',
+      nit: process.env.RECIBO_NIT || '123456789',
+      logo: process.env.RECIBO_LOGO_PATH || null,
+    };
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="recibo_cuota_${cuota.numero}.pdf"`);
+    res.setHeader('Cache-Control', 'no-store');
+
+    const MARGIN = 40;
+    const HEADER_H = 92;
+    const BOX_H = 70;
+
+    const doc = new PDFDocument({ margin: MARGIN, size: 'A4' });
+    doc.pipe(res);
+
+    const W = doc.page.width;
+
+    // Header
+    doc.save();
+    doc.rect(0, 0, W, HEADER_H).fill('#1565C0');
+    if (EMP.logo && fs.existsSync(EMP.logo)) {
+      try {
+        doc.image(EMP.logo, MARGIN, 18, { fit: [50, 50] });
+      } catch {}
+    }
+    doc.fillColor('#FFFFFF');
+    doc.font('Helvetica-Bold').fontSize(18).text(EMP.nombre, MARGIN + 64, 20, { width: W - (MARGIN * 2 + 64) });
+    doc.font('Helvetica').fontSize(10).text(`Dirección: ${EMP.direccion}`, MARGIN + 64, 42, { width: W - (MARGIN * 2 + 64) }).text(
+      `Tel: ${EMP.telefono}    NIT: ${EMP.nit}`,
+      MARGIN + 64,
+      56,
+      { width: W - (MARGIN * 2 + 64) }
+    );
+    doc.font('Helvetica').fontSize(10).fillColor('#E3F2FD').text(fechaL(new Date()), W - MARGIN - 200, 18, {
+      width: 200,
+      align: 'right',
+    });
+    doc.restore();
+
+    doc.moveDown(2);
+
+    // Título
+    doc.font('Helvetica-Bold').fontSize(16).fillColor('#000000').text('RECIBO DE PAGO - CUOTA MENSUAL');
+    doc.moveDown(0.3);
+
+    // Número de recibo
+    const yMeta = doc.y + 4;
+    doc.roundedRect(MARGIN, yMeta, W - MARGIN * 2, 50, 6).stroke('#CFD8DC');
+    const half = (W - MARGIN * 2) / 2;
+    doc.font('Helvetica').fontSize(11).fillColor('#000').text(`Recibo Nro: ${cuota.id_cuota}`, MARGIN + 8, yMeta + 10, {
+      width: half - 16,
+      lineGap: 3,
+    }).text(`Cuota Nro: ${cuota.numero}`, MARGIN + 8, yMeta + 28);
+    doc.text(`Equipo: ${cuota.equipo_codigo}`, MARGIN + half + 8, yMeta + 10, { width: half - 16, lineGap: 3 });
+    doc.text(`Período: ${periodoMes}`, MARGIN + half + 8, yMeta + 28, { width: half - 16, lineGap: 3 });
+    doc.moveDown(3);
+
+    // Cajas Cliente e Información de Pago
+    const GAP = 14;
+    const yBoxes = yMeta + 50 + GAP;
+    doc.roundedRect(MARGIN, yBoxes, (W - MARGIN * 2) / 2 - 6, BOX_H, 6).stroke('#CFD8DC');
+    doc.roundedRect(MARGIN + (W - MARGIN * 2) / 2 + 6, yBoxes, (W - MARGIN * 2) / 2 - 6, BOX_H, 6).stroke('#CFD8DC');
+
+    doc.font('Helvetica-Bold').fontSize(12).text('Cliente', MARGIN + 8, yBoxes + 8);
+    doc.font('Helvetica').fontSize(11).text(`Nombre: ${nombreCliente}`, MARGIN + 8, yBoxes + 28, { lineGap: 3 });
+
+    doc.font('Helvetica-Bold').fontSize(12).text('Información de Pago', MARGIN + (W - MARGIN * 2) / 2 + 14, yBoxes + 8);
+    doc.font('Helvetica').fontSize(11).text(`Fecha de pago: ${fechaCorta(cuota.fecha_pago)}`, MARGIN + (W - MARGIN * 2) / 2 + 14, yBoxes + 28, {
+      lineGap: 3,
+    }).text(`Método: ${cuota.metodo_pago || 'Efectivo'}`, MARGIN + (W - MARGIN * 2) / 2 + 14, yBoxes + 48, { lineGap: 3 });
+
+    // Posicionar cursor
+    doc.y = yBoxes + BOX_H + GAP + 10;
+
+    // Información del Concepto
+    let y = doc.y;
+    doc.font('Helvetica-Bold').fontSize(12).text('Detalle del Pago', MARGIN, y);
+    y += 22;
+    
+    doc.roundedRect(MARGIN, y, W - MARGIN * 2, 80, 6).fill('#F5F5F5').stroke('#CFD8DC');
+    
+    doc.font('Helvetica-Bold').fontSize(11).fillColor('#000');
+    doc.text('Concepto:', MARGIN + 12, y + 12);
+    doc.font('Helvetica').fontSize(11);
+    doc.text(cuota.concepto.toUpperCase(), MARGIN + 80, y + 12);
+    
+    doc.font('Helvetica-Bold').fontSize(11);
+    doc.text('Descripción:', MARGIN + 12, y + 32);
+    doc.font('Helvetica').fontSize(11);
+    doc.text(cuota.descripcion || `Cuota ${cuota.numero} - ${periodoMes}`, MARGIN + 80, y + 32);
+    
+    doc.font('Helvetica-Bold').fontSize(11);
+    doc.text('Período:', MARGIN + 12, y + 52);
+    doc.font('Helvetica').fontSize(11);
+    doc.text(periodoMes, MARGIN + 80, y + 52);
+    
+    y += 90;
+
+    // Total destacado
+    y += 10;
+    doc.moveTo(MARGIN, y).lineTo(W - MARGIN, y).stroke('#DDDDDD');
+    y += 20;
+    
+    doc.font('Helvetica-Bold').fontSize(16).fillColor('#000').text('MONTO PAGADO:', MARGIN, y);
+    doc.font('Helvetica-Bold').fontSize(16).fillColor('#1565C0').text(dinero(cuota.monto), W - MARGIN - 150, y, { width: 150, align: 'right' });
+    
+    y += 45;
+
+    // Observaciones
+    doc.font('Helvetica').fontSize(10).fillColor('#555').text(
+      `Observaciones: ${cuota.observaciones || 'Pago correspondiente a la cuota mensual del servicio de energía eólica.'}`,
+      MARGIN,
+      y,
+      { width: W - MARGIN * 2, lineGap: 2 }
+    );
+
+    y += 50;
+
+    // Firmas
+    const fy = y + 10;
+    doc.fillColor('#000').moveTo(MARGIN + 20, fy).lineTo(MARGIN + 220, fy).stroke('#424242');
+    doc.font('Helvetica').fontSize(10).text('Recibí conforme', MARGIN + 20, fy + 6, { width: 200, align: 'center' });
+    doc.moveTo(W - (MARGIN + 220), fy).lineTo(W - (MARGIN + 20), fy).stroke('#424242');
+    doc.font('Helvetica').fontSize(10).text('Entregué conforme', W - (MARGIN + 220), fy + 6, { width: 200, align: 'center' });
+
+    // Pie
+    const footerY = fy + 40;
+    doc.fontSize(9).fillColor('#777').text(`Recibo generado el ${fechaL(new Date())} | Sistema de Energía Eólica`, MARGIN, footerY, {
       width: W - MARGIN * 2,
       align: 'center',
     });
