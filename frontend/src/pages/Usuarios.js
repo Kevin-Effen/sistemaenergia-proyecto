@@ -5,6 +5,7 @@ import api from "../api/axios";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { Modal, Button } from "react-bootstrap";
+import * as bootstrap from 'bootstrap';
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -744,24 +745,42 @@ function Usuarios() {
         </div>
 
         {/* ==== Buscador ==== */}
-        <div className="card shadow-sm mb-2">
-          <div className="card-body d-flex flex-wrap gap-2 align-items-center">
-            <div className="flex-grow-1">
-              <input
-                type="search"
-                className="form-control"
-                placeholder="Buscar por correo, nombre, apellidos, CI, teléfono, dirección o código eólico…"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-              />
-            </div>
-            {busqueda && (
-              <button className="btn btn-outline-secondary" onClick={() => setBusqueda("")}>
-                Limpiar búsqueda
-              </button>
-            )}
-            <div className="ms-auto text-muted small">
-              {usuariosFiltrados.length} de {usuarios.length} resultados
+        <div className="card shadow-sm mb-3">
+          <div className="card-body">
+            <div className="row g-2 align-items-center">
+              <div className="col-auto">
+                <i className="bi bi-search text-primary fs-4"></i>
+              </div>
+              <div className="col">
+                <div className="input-group">
+                  <div className="input-group-text bg-primary text-white">
+                    <i className="bi bi-funnel-fill"></i>
+                  </div>
+                  <input
+                    type="search"
+                    className="form-control"
+                    placeholder="Buscar por correo, nombre, CI, teléfono, dirección o código eólico..."
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                  />
+                  {busqueda && (
+                    <button 
+                      className="btn btn-outline-secondary" 
+                      onClick={() => setBusqueda("")}
+                      title="Limpiar búsqueda"
+                    >
+                      <i className="bi bi-x-circle me-1"></i>
+                      Limpiar
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="col-auto">
+                <div className="badge bg-info text-white">
+                  <i className="bi bi-list-ul me-1"></i>
+                  {usuariosFiltrados.length} resultado{usuariosFiltrados.length !== 1 ? 's' : ''}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -769,98 +788,212 @@ function Usuarios() {
         {/* Tabla */}
         <div className="card shadow-sm">
           <div className="card-body">
-            <div className="d-flex align-items-center justify-content-between">
-              <h5 className="card-title mb-0">Lista de Usuarios</h5>
-              {cargandoLista && <span className="text-muted">Cargando...</span>}
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <h5 className="card-title mb-0">
+                <i className="bi bi-people-fill me-2 text-primary"></i>
+                Lista de Usuarios
+              </h5>
+              {cargandoLista && (
+                <div className="text-muted">
+                  <i className="spinner-border spinner-border-sm me-2"></i>
+                  Cargando...
+                </div>
+              )}
             </div>
 
-            <div className="table-responsive mt-3">
+            <div className="table-responsive">
               <table className="table table-striped table-bordered align-middle">
-                <thead className="table-light">
-                  <tr>
-                    <th style={{ minWidth: 70 }}>Nro.</th>
-                    <th style={{ minWidth: 200 }}>Usuario (correo)</th>
-                      <th style={{ minWidth: 120 }}>Rol</th>
-                      <th style={{ minWidth: 160 }}>Nombres</th>
-                      <th style={{ minWidth: 160 }}>Primer Apellido</th>
-                      <th style={{ minWidth: 160 }}>Segundo Apellido</th>
-                      <th style={{ minWidth: 120 }}>CI</th>
-                      <th style={{ minWidth: 150 }}>Fecha Nacimiento</th>
-                      <th style={{ minWidth: 130 }}>Teléfono</th>
-                      <th style={{ minWidth: 220 }}>Dirección</th>
-                      <th style={{ minWidth: 130 }}>Código Eólico</th>
-                      <th style={{ minWidth: 120 }}>Estado</th>
-                      <th style={{ minWidth: 320 }}>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {usuariosFiltrados.map((u, idx) => {
-                      const nro = idx + 1; // Nro. en vez de ID
-                      const tieneEolico = !!u.eolico_codigo;
-                      const habil = !!u.eolico_habilitado;
-                      return (
-                        <tr key={u.id_usuario} title={`ID interno: ${u.id_usuario}`}>
-                          <td>{nro}</td>
-                          <td className="text-break">{u.usuario || ""}</td>
-                        <td>{u.nombre_rol || ""}</td>
-                        <td className="text-break">{u.nombres || ""}</td>
-                        <td className="text-break">{u.primer_apellido || ""}</td>
-                        <td className="text-break">{u.segundo_apellido || ""}</td>
-                        <td>{u.ci || ""}</td>
-                        <td>{fmtFecha(u.fecha_nacimiento)}</td>
-                        <td>{u.telefono || ""}</td>
-                        <td className="text-break">{u.direccion || ""}</td>
+                <thead className="table-dark">
+                  <tr className="align-middle">
+                    <th style={{ minWidth: 60, width: '4%' }}>Nro.</th>
+                    <th style={{ minWidth: 220, width: '22%' }}>Información Personal</th>
+                    <th style={{ minWidth: 180, width: '18%' }}>Contacto</th>
+                    <th style={{ minWidth: 120, width: '10%' }}>Rol</th>
+                    <th style={{ minWidth: 180, width: '18%' }}>Equipo y Estado</th>
+                    <th style={{ minWidth: 180, width: '18%' }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usuariosFiltrados.map((u, idx) => {
+                    const nro = idx + 1;
+                    const tieneEolico = !!u.eolico_codigo;
+                    const habil = !!u.eolico_habilitado;
+                    const nombreCompleto = [u.nombres, u.primer_apellido, u.segundo_apellido]
+                      .filter(Boolean)
+                      .join(" ") || "Sin nombre";
 
-                        <td>{tieneEolico ? u.eolico_codigo : "—"}</td>
+                    return (
+                      <tr key={`user-${u.id_usuario}-${u.usuario}`}>
+                        {/* Número */}
+                        <td className="text-center">
+                          <div className="badge bg-light text-dark border fw-semibold">{nro}</div>
+                        </td>
+
+                        {/* Información Personal */}
+                        <td>
+                          <div className="d-flex flex-column gap-1">
+                            <div className="d-flex align-items-center gap-2">
+                              <i className="bi bi-person-circle text-primary fs-5"></i>
+                              <strong className="text-dark">{nombreCompleto}</strong>
+                            </div>
+                            <small className="text-muted">
+                              <i className="bi bi-envelope me-1"></i>
+                              {u.usuario || "Sin correo"}
+                            </small>
+                            {u.ci && (
+                              <small className="text-muted">
+                                <i className="bi bi-card-text me-1"></i>
+                                CI: {u.ci}
+                              </small>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Contacto */}
+                        <td>
+                          <div className="d-flex flex-column gap-1">
+                            {u.telefono && (
+                              <div className="text-muted">
+                                <i className="bi bi-telephone-fill me-1 text-success"></i>
+                                {u.telefono}
+                              </div>
+                            )}
+                            {u.direccion && (
+                              <small className="text-muted text-break">
+                                <i className="bi bi-geo-alt-fill me-1"></i>
+                                {u.direccion}
+                              </small>
+                            )}
+                            {u.fecha_nacimiento && (
+                              <small className="text-muted">
+                                <i className="bi bi-calendar-event me-1"></i>
+                                {fmtFecha(u.fecha_nacimiento)}
+                              </small>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Rol */}
+                        <td className="text-center">
+                          <div className={`badge ${u.nombre_rol === 'administrador' ? 'bg-danger' : 'bg-info'} text-white`}>
+                            <i className={`bi ${u.nombre_rol === 'administrador' ? 'bi-shield-fill-check' : 'bi-person-badge'} me-1`}></i>
+                            {u.nombre_rol || "usuario"}
+                          </div>
+                        </td>
+
+                        {/* Equipo y Estado (FUSIONADOS) */}
                         <td>
                           {tieneEolico ? (
-                            <span className={`badge ${habil ? "bg-success" : "bg-danger"}`}>
-                              {habil ? "Activado" : "Desactivado"}
-                            </span>
+                            <div className="d-flex flex-column gap-2">
+                              <div className="d-flex align-items-center gap-2">
+                                <i className="bi bi-wind text-primary fs-5"></i>
+                                <strong className="text-dark">{u.eolico_codigo}</strong>
+                              </div>
+                              <div className={`badge ${habil ? "bg-success" : "bg-danger"} w-100`}>
+                                <i className={`bi ${habil ? "bi-check-circle-fill" : "bi-x-circle-fill"} me-1`}></i>
+                                {habil ? "✓ Activo" : "✗ Inactivo"}
+                              </div>
+                            </div>
                           ) : (
-                            <span className="badge bg-secondary">No asignado</span>
+                            <div className="text-center">
+                              <div className="text-muted fst-italic mb-2">
+                                <i className="bi bi-dash-circle"></i>
+                                <div>Sin equipo</div>
+                              </div>
+                              <div className="badge bg-secondary w-100">N/A</div>
+                            </div>
                           )}
                         </td>
 
+                        {/* Acciones */}
                         <td>
-                          <div className="d-flex flex-wrap gap-2">
+                          <div className="d-flex flex-column gap-2" style={{ minWidth: '160px' }}>
+                            {/* Botón directo: Asignar/Ver Equipo */}
                             <button
-                              className="btn btn-sm btn-warning"
-                              onClick={() => handleEditar(u)}
-                            >
-                              Editar
-                            </button>
-
-                            <button
-                              className="btn btn-sm btn-danger"
-                              onClick={() => handleEliminar(u.id_usuario)}
-                              disabled={borrandoId === u.id_usuario}
-                            >
-                              {borrandoId === u.id_usuario ? "Eliminando..." : "Eliminar"}
-                            </button>
-
-                            {/* ON/OFF si tiene eólico */}
-                            <button
-                              className={`btn btn-sm ${habil ? "btn-success" : "btn-outline-danger"}`}
-                              disabled={!u.eolico_id || toggleId === u.id_usuario}
-                              onClick={() => handleToggleEolico(u)}
-                              title={u.eolico_id ? "Cambiar estado" : "Sin eólico asignado"}
-                            >
-                              {toggleId === u.id_usuario
-                                ? "Guardando..."
-                                : u.eolico_id
-                                  ? (habil ? "Desactivar" : "Activar")
-                                  : "—"}
-                            </button>
-
-                            {/* Ir a Eólicos filtrado por este usuario */}
-                            <button
-                              className="btn btn-sm btn-outline-primary"
+                              className="btn btn-sm btn-primary w-100"
                               onClick={() => navigate(`/eolicos?userId=${u.id_usuario}`)}
-                              title="Asignar / Ver eólico de este usuario"
+                              title={tieneEolico ? "Ver equipo asignado" : "Asignar equipo eólico"}
                             >
-                              Asignar/Ver Eólico
+                              <i className="bi bi-wind me-1"></i>
+                              {tieneEolico ? "Ver Equipo" : "Asignar"}
                             </button>
+
+                            {/* Dropdown de Acciones */}
+                            <div className="dropdown">
+                              <button
+                                className="btn btn-sm btn-outline-secondary dropdown-toggle w-100"
+                                type="button"
+                                id={`dropdownAcciones-${u.id_usuario}`}
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false"
+                                title="Ver acciones disponibles"
+                              >
+                                <i className="bi bi-gear-fill me-1"></i>
+                                Acciones
+                              </button>
+                              <ul className="dropdown-menu dropdown-menu-end" aria-labelledby={`dropdownAcciones-${u.id_usuario}`}>
+                                {/* Editar */}
+                                <li>
+                                  <button
+                                    className="dropdown-item"
+                                    onClick={() => handleEditar(u)}
+                                  >
+                                    <i className="bi bi-pencil-square text-warning me-2"></i>
+                                    Editar Usuario
+                                  </button>
+                                </li>
+
+                                {/* Separador si tiene equipo */}
+                                {tieneEolico && <li><hr className="dropdown-divider" /></li>}
+
+                                {/* Toggle Estado (si tiene equipo) */}
+                                {tieneEolico && (
+                                  <li>
+                                    <button
+                                      className="dropdown-item"
+                                      onClick={() => handleToggleEolico(u)}
+                                      disabled={toggleId === u.id_usuario}
+                                    >
+                                      {toggleId === u.id_usuario ? (
+                                        <>
+                                          <i className="spinner-border spinner-border-sm me-2"></i>
+                                          Procesando...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <i className={`bi ${habil ? "bi-toggle-off text-danger" : "bi-toggle-on text-success"} me-2`}></i>
+                                          {habil ? "Desactivar Equipo" : "Activar Equipo"}
+                                        </>
+                                      )}
+                                    </button>
+                                  </li>
+                                )}
+
+                                {/* Separador */}
+                                <li><hr className="dropdown-divider" /></li>
+
+                                {/* Eliminar */}
+                                <li>
+                                  <button
+                                    className="dropdown-item text-danger"
+                                    onClick={() => handleEliminar(u.id_usuario)}
+                                    disabled={borrandoId === u.id_usuario}
+                                  >
+                                    {borrandoId === u.id_usuario ? (
+                                      <>
+                                        <i className="spinner-border spinner-border-sm me-2"></i>
+                                        Eliminando...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <i className="bi bi-trash-fill me-2"></i>
+                                        Eliminar Usuario
+                                      </>
+                                    )}
+                                  </button>
+                                </li>
+                              </ul>
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -868,8 +1001,10 @@ function Usuarios() {
                   })}
                   {usuariosFiltrados.length === 0 && !cargandoLista && (
                     <tr>
-                      <td colSpan="13" className="text-center text-muted">
-                        No hay usuarios que coincidan con la búsqueda.
+                      <td colSpan="6" className="text-center text-muted py-4">
+                        <i className="bi bi-inbox fs-1 d-block mb-2"></i>
+                        <p className="mb-0">No hay usuarios que coincidan con la búsqueda</p>
+                        <small>Intenta con otros términos o limpia el filtro</small>
                       </td>
                     </tr>
                   )}
