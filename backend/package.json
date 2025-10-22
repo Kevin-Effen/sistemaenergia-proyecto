@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -25,5 +26,8 @@
     "pdfkit": "^0.17.2",
     "pdfkit-table": "^0.1.99"
   },
-  "description": ""
+  "description": "",
+  "devDependencies": {
+    "qrcode-terminal": "^0.12.0"
+  }
 }

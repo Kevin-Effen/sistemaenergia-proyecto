@@ -67,7 +67,11 @@ function Login() {
       localStorage.setItem("rol", data.rol.toLowerCase());
       localStorage.setItem(
         "usuario",
-        JSON.stringify({ usuario: data.usuario, rol: data.rol.toLowerCase() })
+        JSON.stringify({ 
+          usuario: data.usuario, 
+          rol: data.rol.toLowerCase(),
+          nombre: data.nombre || data.usuario
+        })
       );
       api.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
 

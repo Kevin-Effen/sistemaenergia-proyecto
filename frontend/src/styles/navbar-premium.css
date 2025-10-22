@@ -1,0 +1,476 @@
+/* ========================================
+   NAVBAR - Diseño Profesional y Moderno
+   ======================================== */
+
+/* Variables CSS para tema consistente */
+:root {
+  --navbar-height: 70px;
+  --navbar-bg-primary: #1e3a8a;
+  --navbar-bg-secondary: #3b82f6;
+  --navbar-gradient: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  --navbar-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  --navbar-text: #ffffff;
+  --navbar-text-secondary: rgba(255, 255, 255, 0.85);
+  --navbar-hover: rgba(255, 255, 255, 0.15);
+  --navbar-active: rgba(255, 255, 255, 0.25);
+  --transition-speed: 0.3s;
+}
+
+/* Navbar principal con diseño premium */
+.navbar,
+.navbar.navbar-dark,
+nav.navbar,
+.navbar-fixed-custom {
+  min-height: var(--navbar-height) !important;
+  padding: 0 !important;
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%) !important;
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all var(--transition-speed) ease;
+  position: relative !important;
+  width: 100% !important;
+  z-index: 1030 !important;
+  margin: 0 !important;
+}
+
+/* Forzar que no haya background-image de otra fuente */
+.navbar[style*="background"] {
+  background: var(--navbar-gradient) !important;
+  background-image: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%) !important;
+}
+
+/* Eliminar cualquier overlay que oculte el gradiente */
+.navbar > div[style*="position: absolute"] {
+  display: none !important;
+}
+
+/* Container del navbar */
+.navbar .container-fluid {
+  padding: 0 1.5rem !important;
+  height: var(--navbar-height);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Navbar Collapse - Asegurar visibilidad */
+.navbar-collapse,
+#basic-navbar-nav {
+  flex-grow: 1;
+  align-items: center;
+}
+
+/* En desktop centrar enlaces */
+@media (min-width: 992px) {
+  .navbar-collapse {
+    display: flex !important;
+  }
+  
+  #basic-navbar-nav {
+    display: flex !important;
+  }
+}
+
+/* Wrapper de enlaces desktop */
+.nav-enlaces-grandes {
+  display: flex !important;
+  gap: 0.75rem !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+  visibility: visible !important;
+}
+
+/* Título del sistema - Diseño elegante */
+.titulo-container {
+  flex-shrink: 0;
+  margin-right: auto;
+}
+
+.titulo-animado {
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.5px;
+  line-height: var(--navbar-height) !important;
+  margin: 0 !important;
+  color: #ffffff !important;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3), 0 0 20px rgba(255, 255, 255, 0.3);
+  animation: titleGlow 3s ease-in-out infinite;
+  position: relative;
+  display: inline-block;
+}
+
+@keyframes titleGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
+  }
+  50% {
+    filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.4));
+  }
+}
+
+/* Icono de energía antes del título */
+.titulo-animado::before {
+  content: '⚡';
+  margin-right: 0.5rem;
+  font-size: 1.8rem;
+  vertical-align: middle;
+  animation: energyPulse 2s ease-in-out infinite;
+}
+
+@keyframes energyPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* Botón de menú hamburguesa - Diseño moderno */
+.navbar-toggler {
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 12px !important;
+  padding: 0.5rem 0.75rem !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: blur(10px);
+  transition: all var(--transition-speed) ease !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.navbar-toggler::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+  opacity: 0;
+  transition: opacity var(--transition-speed) ease;
+}
+
+.navbar-toggler:hover {
+  border-color: rgba(255, 255, 255, 0.6) !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.navbar-toggler:hover::before {
+  opacity: 1;
+}
+
+.navbar-toggler:focus {
+  box-shadow: 0 0 0 0.25rem rgba(255, 255, 255, 0.25) !important;
+  border-color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Icono del hamburguesa - Animación suave */
+.navbar-toggler-icon {
+  background-image: none !important;
+  width: 26px;
+  height: 20px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.navbar-toggler-icon::before,
+.navbar-toggler-icon::after,
+.navbar-toggler-icon span {
+  content: '';
+  display: block;
+  height: 3px;
+  width: 100%;
+  background: #ffffff;
+  border-radius: 2px;
+  transition: all var(--transition-speed) ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.navbar-toggler[aria-expanded="true"] .navbar-toggler-icon::before {
+  transform: translateY(8.5px) rotate(45deg);
+}
+
+.navbar-toggler[aria-expanded="true"] .navbar-toggler-icon::after {
+  transform: translateY(-8.5px) rotate(-45deg);
+}
+
+.navbar-toggler[aria-expanded="true"] .navbar-toggler-icon span {
+  opacity: 0;
+  transform: scale(0);
+}
+
+/* Enlaces de navegación - Diseño profesional */
+.nav-enlaces-grandes {
+  gap: 0.5rem !important;
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.nav-item-hover,
+.navbar .nav-link,
+.navbar-dark .navbar-nav .nav-link {
+  position: relative;
+  padding: 0.6rem 1rem !important;
+  border-radius: 10px;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: #ffffff !important;
+  text-decoration: none !important;
+  transition: all var(--transition-speed) ease;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.nav-item-hover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--navbar-hover);
+  border-radius: 10px;
+  opacity: 0;
+  transition: opacity var(--transition-speed) ease;
+}
+
+.nav-item-hover:hover,
+.navbar .nav-link:hover {
+  color: #ffffff !important;
+  transform: translateY(-2px);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+
+.nav-item-hover:hover::before {
+  opacity: 1;
+}
+
+.nav-item-hover.active {
+  background: var(--navbar-active);
+  font-weight: 600;
+}
+
+/* Asegurar que los iconos sean visibles */
+.nav-item-hover i,
+.navbar .nav-link i {
+  color: #ffffff !important;
+  opacity: 1 !important;
+  display: inline-block !important;
+}
+
+/* Dropdown de usuario - Premium */
+.navbar .dropdown-toggle {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 25px !important;
+  padding: 0.5rem 1rem !important;
+  color: var(--navbar-text) !important;
+  font-weight: 500;
+  transition: all var(--transition-speed) ease;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+
+.navbar .dropdown-toggle:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.navbar .dropdown-toggle::after {
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Avatar en dropdown */
+.navbar .dropdown-toggle span[style*="borderRadius"] {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(255, 255, 255, 0.2) !important;
+  transition: all var(--transition-speed) ease;
+}
+
+.navbar .dropdown-toggle:hover span[style*="borderRadius"] {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 3px rgba(255, 255, 255, 0.4) !important;
+  transform: scale(1.1);
+}
+
+/* Badge de alertas */
+.navbar .badge {
+  padding: 0.35rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Offcanvas (menú lateral) - Diseño premium */
+.offcanvas {
+  background: linear-gradient(180deg, #1e3a8a 0%, #3b82f6 100%) !important;
+  backdrop-filter: blur(20px);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.offcanvas-header {
+  background: rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 1.5rem;
+}
+
+.offcanvas-title {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.offcanvas-title::before {
+  content: '⚡';
+  font-size: 1.5rem;
+  animation: energyPulse 2s ease-in-out infinite;
+}
+
+.btn-close {
+  background: rgba(255, 255, 255, 0.2) !important;
+  opacity: 1 !important;
+  border-radius: 8px;
+  padding: 0.5rem;
+  transition: all var(--transition-speed) ease;
+}
+
+.btn-close:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+  transform: rotate(90deg);
+}
+
+/* Enlaces en offcanvas */
+.offcanvas-body .nav-link {
+  color: rgba(255, 255, 255, 0.9) !important;
+  padding: 1rem 1.25rem;
+  margin: 0.25rem 0;
+  border-radius: 12px;
+  font-weight: 500;
+  transition: all var(--transition-speed) ease;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.offcanvas-body .nav-link:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff !important;
+  transform: translateX(8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.offcanvas-body .nav-link i {
+  margin-right: 0.75rem;
+  font-size: 1.1rem;
+  width: 20px;
+  text-align: center;
+}
+
+/* Dropdown en offcanvas */
+.offcanvas-body .dropdown-toggle {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 12px !important;
+  color: #ffffff !important;
+  padding: 1rem 1.25rem !important;
+  margin: 0.25rem 0;
+  width: 100%;
+  text-align: left;
+}
+
+.offcanvas-body .dropdown-toggle:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Responsive */
+@media (max-width: 991.98px) {
+  .titulo-animado {
+    font-size: 1.2rem !important;
+  }
+  
+  .titulo-animado::before {
+    font-size: 1.4rem;
+  }
+  
+  .navbar .container-fluid {
+    padding: 0 1rem;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .titulo-animado {
+    font-size: 1rem !important;
+  }
+  
+  .titulo-animado::before {
+    font-size: 1.2rem;
+  }
+  
+  .navbar {
+    min-height: 60px !important;
+  }
+  
+  .navbar .container-fluid {
+    height: 60px;
+    padding: 0 0.75rem;
+  }
+}
+
+/* Animaciones de entrada */
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate__fadeInDown {
+  animation: fadeInDown 0.6s ease-out;
+}
+
+/* Sombras de texto para mejor legibilidad */
+.text-shadow {
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Mejoras de accesibilidad */
+.nav-link:focus,
+.navbar-toggler:focus,
+.btn-close:focus {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 2px;
+}
+
+/* Estado loading en navbar */
+.navbar-loading {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Notificación badge pulse */
+@keyframes badgePulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.badge.animate__pulse {
+  animation: badgePulse 1.5s ease-in-out infinite;
+}

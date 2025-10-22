@@ -1,0 +1,65 @@
+/* ========================================
+   NAVBAR - CORRECCIÓN DE VISIBILIDAD
+   Versión Desktop Mejorada
+   ======================================== */
+
+/* Asegurar que el gradiente azul siempre sea visible */
+.navbar.navbar-dark {
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%) !important;
+  background-image: none !important; /* Eliminar cualquier imagen de fondo */
+}
+
+/* Mejorar contraste del texto en desktop */
+@media (min-width: 992px) {
+  .navbar .nav-item-hover {
+    color: #ffffff !important;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+  
+  .titulo-animado {
+    color: #ffffff !important;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* Asegurar que los enlaces sean visibles con buen contraste */
+.navbar-dark .navbar-nav .nav-link {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.navbar-dark .navbar-nav .nav-link:hover,
+.navbar-dark .navbar-nav .nav-link:focus {
+  color: #ffffff !important;
+}
+
+/* Dropdown toggle visible */
+.navbar-dark .dropdown-toggle {
+  color: #ffffff !important;
+}
+
+/* Asegurar que no haya overlays oscuros que oculten el gradiente */
+.navbar > div[style*="background"][style*="linear-gradient"] {
+  display: none !important;
+}
+
+/* Forzar z-index correcto */
+.navbar .container-fluid > * {
+  position: relative;
+  z-index: 10;
+}
+
+/* Mejorar visibilidad del botón hamburguesa */
+.navbar-toggler {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.navbar-toggler:hover {
+  background: rgba(255, 255, 255, 0.25) !important;
+  border-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Asegurar que el navbar no tenga background image */
+.navbar[style*="backgroundImage"] {
+  background-image: none !important;
+}

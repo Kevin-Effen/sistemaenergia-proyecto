@@ -1,10 +1,11 @@
 import axios from "axios";
+import logger from "../utils/logger";
 
 // 🔧 Configuración de la API con reintentos automáticos
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_BASE || "http://localhost:3001",
   withCredentials: true,
-  timeout: 15000, // 15 segundos
+  timeout: 30000, // 30 segundos (aumentado para PDFs grandes)
   headers: {
     'Content-Type': 'application/json',
   },
@@ -41,7 +42,7 @@ api.interceptors.response.use(
     if (isServerDown) {
       isServerDown = false;
       reconnectAttempts = 0;
-      console.log("✅ Conexión con el servidor restablecida");
+      logger.success("Conexión con el servidor restablecida");
     }
     return res;
   },
@@ -57,7 +58,7 @@ api.interceptors.response.use(
         originalRequest._retry = true;
         reconnectAttempts++;
         
-        console.warn(`⚠️ Servidor no disponible. Intento ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}...`);
+        logger.warn(`Servidor no disponible. Intento ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}...`);
         
         // Esperar antes de reintentar (backoff exponencial)
         await new Promise(resolve => setTimeout(resolve, 1000 * reconnectAttempts));
@@ -65,7 +66,7 @@ api.interceptors.response.use(
         return api(originalRequest);
       } else {
         isServerDown = true;
-        console.error("❌ No se pudo conectar con el servidor después de varios intentos");
+        logger.error("No se pudo conectar con el servidor después de varios intentos");
       }
     }
 
@@ -80,7 +81,7 @@ api.interceptors.response.use(
 
       // Redirigir solo si no estás en login
       if (path !== "/" && !path.includes("/login") && !path.includes("/reset-password")) {
-        console.warn("🔒 Sesión expirada. Redirigiendo al login...");
+        logger.warn("Sesión expirada. Redirigiendo al login...");
         setTimeout(() => {
           window.location.replace("/");
         }, 1000);
@@ -89,22 +90,22 @@ api.interceptors.response.use(
 
     // 423 → cuenta bloqueada temporalmente
     if (status === 423) {
-      console.warn("🔒 Cuenta bloqueada temporalmente. Intenta más tarde.");
+      logger.warn("Cuenta bloqueada temporalmente. Intenta más tarde.");
     }
 
     // 429 → demasiadas solicitudes
     if (status === 429) {
-      console.warn("⏱️ Demasiadas solicitudes. Intenta de nuevo en un momento.");
+      logger.warn("Demasiadas solicitudes. Intenta de nuevo en un momento.");
     }
 
     // 500 → error del servidor
     if (status === 500) {
-      console.error("💥 Error interno del servidor");
+      logger.error("Error interno del servidor");
     }
 
     // 503 → servicio no disponible
     if (status === 503) {
-      console.error("🚫 Servicio temporalmente no disponible");
+      logger.error("Servicio temporalmente no disponible");
     }
 
     return Promise.reject(error);

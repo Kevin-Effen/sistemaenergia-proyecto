@@ -1,7 +1,8 @@
 // src/pages/DashboardUsuario.js
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
+import { useDevice } from "../context/DeviceContext";
 
 import { Line } from "react-chartjs-2";
 import {
@@ -22,10 +23,14 @@ import {
   Button,
   Row,
   Col,
-  Spinner,
   Form,
   Badge,
+  Alert,
 } from "react-bootstrap";
+
+
+// Importar CSS para diseño móvil profesional
+import "../styles/dashboard-mobile.css";
 
 ChartJS.register(
   LineElement,
@@ -66,19 +71,51 @@ const fmtNum = (n, dec = 0, suf = "") =>
   Number.isFinite(Number(n)) ? `${Number(n).toFixed(dec)}${suf}` : "—";
 
 /* =========================
+   Hook personalizado para detectar tamaño de pantalla
+========================= */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return isMobile;
+}
+
+/* =========================
    Componente principal
 ========================= */
 
 export default function DashboardUsuario() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile(); // Hook para detectar móvil
+  
+  // ---- Ref para evitar auto-selección si ya hay dispositivo en Context ----
+  const hasInitialized = useRef(false);
+
+  // ---- Contexto global para dispositivos ----
+  const { 
+    dispositivoSeleccionado, 
+    setDispositivoSeleccionado,
+    dispositivos,
+    setDispositivos 
+  } = useDevice();
 
   // ---- Estado UI ----
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
-  // ---- Dispositivos del usuario ----
-  const [dispositivos, setDispositivos] = useState([]);
-  const [dispositivoSeleccionado, setDispositivoSeleccionado] = useState(null);
+  // ---- Cargando dispositivos ----
   const [cargandoDispositivos, setCargandoDispositivos] = useState(true);
 
   // ---- Datos ----
@@ -145,9 +182,14 @@ export default function DashboardUsuario() {
         const disps = Array.isArray(dispRes.data) ? dispRes.data : [];
         setDispositivos(disps);
         
-        // Seleccionar automáticamente el primer dispositivo si existe
-        if (disps.length > 0) {
+        // Seleccionar automáticamente el primer dispositivo SOLO si:
+        // 1. Hay dispositivos disponibles
+        // 2. No hay uno ya seleccionado en el Context (verificar localStorage directamente)
+        // 3. Es la primera carga (no es re-entrada desde otra página)
+        const currentSelection = localStorage.getItem('dispositivoSeleccionado');
+        if (disps.length > 0 && !currentSelection && !hasInitialized.current) {
           setDispositivoSeleccionado(disps[0].codigo);
+          hasInitialized.current = true;
         }
       } catch (e) {
         console.error("Error cargando perfil/dispositivos:", e);
@@ -157,7 +199,7 @@ export default function DashboardUsuario() {
         setCargandoDispositivos(false);
       }
     })();
-  }, [navigate]);
+  }, [navigate, setDispositivos, setDispositivoSeleccionado]);
 
   // ---- Carga de datos desde el backend ----
   const cargar = useCallback(async () => {
@@ -273,26 +315,90 @@ export default function DashboardUsuario() {
     [lecturas, etiquetas]
   );
 
+  // Opciones del gráfico - Optimizado para móvil con hook seguro
   const opcionesGrafico = useMemo(
     () => ({
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: "bottom" },
-        tooltip: { mode: "index", intersect: false },
+        legend: { 
+          position: isMobile ? "top" : "bottom",
+          labels: {
+            boxWidth: isMobile ? 12 : 15,
+            font: {
+              size: isMobile ? 10 : 12
+            },
+            padding: isMobile ? 8 : 10,
+            usePointStyle: true
+          }
+        },
+        tooltip: { 
+          mode: "index", 
+          intersect: false,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          padding: 12,
+          titleFont: {
+            size: isMobile ? 11 : 13
+          },
+          bodyFont: {
+            size: isMobile ? 10 : 12
+          },
+          callbacks: {
+            title: function(context) {
+              return context[0].label;
+            },
+            label: function(context) {
+              let label = context.dataset.label || '';
+              if (label) {
+                label += ': ';
+              }
+              label += context.parsed.y.toFixed(2);
+              return label;
+            }
+          }
+        },
         title: {
-          display: true,
-          text: "Voltaje / Batería / Consumo (últimas lecturas)",
+          display: false  // Ocultamos el título para ahorrar espacio en móvil
         },
       },
-      interaction: { mode: "nearest", intersect: false },
-      animation: { duration: 300, easing: "easeOutQuart" },
+      interaction: { 
+        mode: "nearest", 
+        intersect: false,
+        axis: 'x'
+      },
+      animation: { 
+        duration: isMobile ? 200 : 300, 
+        easing: "easeOutQuart" 
+      },
       scales: {
-        y: { beginAtZero: false },
-        x: { ticks: { maxRotation: 0, autoSkip: true } },
+        y: { 
+          beginAtZero: false,
+          ticks: {
+            font: {
+              size: isMobile ? 9 : 11
+            },
+            maxTicksLimit: isMobile ? 6 : 8
+          },
+          grid: {
+            color: 'rgba(0, 0, 0, 0.05)'
+          }
+        },
+        x: { 
+          ticks: { 
+            maxRotation: 0, 
+            autoSkip: true,
+            maxTicksLimit: isMobile ? 6 : 10,
+            font: {
+              size: isMobile ? 9 : 11
+            }
+          },
+          grid: {
+            display: false
+          }
+        },
       },
     }),
-    []
+    [isMobile]
   );
 
   const ultimaFecha =
@@ -310,91 +416,120 @@ export default function DashboardUsuario() {
 
   return (
     <div className="container py-4">
-      {/* Hero / encabezado */}
-      <div
-        className="rounded-3 p-4 mb-4 shadow-sm"
-        style={{
-          background:
-            "linear-gradient(135deg, rgba(0,123,255,0.1), rgba(40,167,69,0.1))",
-          border: "1px solid rgba(0,0,0,0.05)",
-        }}
-      >
-        <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
-          <div>
-            {/* ⬇️ Muestra NOMBRE, no correo */}
-            <h2 className="mb-1">
-              Bienvenido,{" "}
-              {perfil?.nombre_completo ? perfil.nombre_completo : "Usuario"}
-            </h2>
-            <div className="text-muted">
-              Panel de usuario • Monitoreo en tiempo real
-            </div>
+      {/* Hero / encabezado - Optimizado y compacto */}
+      <div className="dashboard-hero fade-in" style={{ padding: '1rem 1.5rem' }}>
+        <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+          <div className="d-flex flex-column gap-0">
+            <h3 className="mb-0 d-inline" style={{ fontWeight: 700, fontSize: '1.5rem' }}>
+              👋 Hola, {perfil?.nombre_completo ? perfil.nombre_completo.split(" ")[0] : "Usuario"}
+            </h3>
+            <small className="text-muted" style={{ fontSize: '0.875rem' }}>
+              Panel de monitoreo en tiempo real
+            </small>
           </div>
 
-          <div className="d-flex align-items-center gap-3">
+          <div className="d-flex align-items-center gap-2 mt-2 mt-md-0">
             <Button
-              variant="outline-secondary"
+              variant="outline-primary"
               onClick={cargar}
               disabled={cargando}
+              className="btn-refresh"
+              style={{ 
+                borderRadius: '8px',
+                fontWeight: 500,
+                minHeight: '38px',
+                whiteSpace: 'nowrap'
+              }}
             >
-              {cargando ? "Cargando..." : "Actualizar ahora"}
+              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{ display: cargando ? 'inline-block' : 'none' }}></span>
+              <i className="bi bi-arrow-clockwise me-2" style={{ display: cargando ? 'none' : 'inline' }}></i>
+              {cargando ? 'Actualizando...' : 'Actualizar'}
             </Button>
           </div>
         </div>
       </div>
 
-      {error && <div className="alert alert-danger">{error}</div>}
+      {error && (
+        <Alert 
+          variant="danger" 
+          dismissible 
+          onClose={() => setError("")} 
+          className="fade-in"
+          key="error-alert"
+        >
+          <Alert.Heading style={{ fontSize: '1rem' }}>
+            <i className="bi bi-exclamation-triangle-fill me-2"></i>
+            Error
+          </Alert.Heading>
+          <p className="mb-0" style={{ fontSize: '0.9rem' }}>{error}</p>
+        </Alert>
+      )}
 
-      {/* Selector de dispositivos */}
-      <Card className="shadow-sm mb-4 border-0">
-        <Card.Body className="py-3">
-          <Row className="align-items-center">
-            <Col md={8}>
-              <div className="d-flex align-items-center gap-3">
-                <div className="text-muted" style={{ minWidth: 180 }}>
-                  <strong>Seleccionar dispositivo:</strong>
-                </div>
-                {cargandoDispositivos ? (
-                  <Spinner animation="border" size="sm" />
-                ) : dispositivos.length === 0 ? (
-                  <div className="text-muted">No tienes dispositivos asignados</div>
-                ) : (
-                  <Form.Select
-                    value={dispositivoSeleccionado || ""}
-                    onChange={(e) => setDispositivoSeleccionado(e.target.value)}
-                    style={{ maxWidth: 400 }}
-                  >
-                    {dispositivos.map((disp) => (
-                      <option key={disp.codigo} value={disp.codigo}>
-                        {disp.codigo} - {disp.habilitado ? "✓ Activo" : "✗ Inactivo"}
-                      </option>
-                    ))}
-                  </Form.Select>
-                )}
-              </div>
-            </Col>
-            <Col md={4} className="text-md-end mt-2 mt-md-0">
+      {/* Selector de dispositivos - Optimizado para móvil */}
+      <Card className="device-selector-card border-0 fade-in">
+        <Card.Body>
+          <div className="device-selector-label">
+            <i className="bi bi-hdd-network me-2"></i>
+            Dispositivo a monitorear
+          </div>
+          
+          {cargandoDispositivos ? (
+            <div className="text-center py-3">
+              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              <span className="text-muted">Cargando dispositivos...</span>
+            </div>
+          ) : dispositivos.length === 0 ? (
+            <Alert variant="info" className="mb-0">
+              <i className="bi bi-info-circle me-2"></i>
+              No tienes dispositivos asignados
+            </Alert>
+          ) : (
+            <div>
+              <Form.Select
+                value={dispositivoSeleccionado || ""}
+                onChange={(e) => setDispositivoSeleccionado(e.target.value)}
+                className="w-100"
+                style={{ 
+                  minHeight: '44px',
+                  fontSize: '0.95rem',
+                  borderRadius: '8px'
+                }}
+              >
+                {dispositivos.map((disp) => (
+                  <option key={disp.codigo} value={disp.codigo}>
+                    {disp.codigo} {disp.habilitado ? "• Activo ✓" : "• Inactivo ✗"}
+                  </option>
+                ))}
+              </Form.Select>
+              
               {dispositivoSeleccionado && (
-                <Badge bg="success" className="px-3 py-2">
-                  <i className="bi bi-check-circle me-1"></i>
-                  Monitoreando: {dispositivoSeleccionado}
-                </Badge>
+                <div className="mt-2 text-center" key={`badge-${dispositivoSeleccionado}`}>
+                  <Badge bg="success" className="device-selector-badge">
+                    <i className="bi bi-broadcast me-1"></i>
+                    Monitoreando: {dispositivoSeleccionado}
+                  </Badge>
+                </div>
               )}
-            </Col>
-          </Row>
+            </div>
+          )}
         </Card.Body>
       </Card>
 
-      {/* KPIs */}
+      {/* KPIs - Optimizado para móvil con diseño profesional */}
       <Row className="g-3 mb-4">
-        <Col md={4}>
-          <Card className="shadow-sm h-100 border-0">
-            <Card.Body className="d-flex justify-content-between align-items-center">
-              <div>
-                <div className="text-muted small mb-1">Voltaje</div>
-                <div className="fs-4 fw-bold">{fmtNum(voltaje, 2, " V")}</div>
+        <Col xs={12} md={4}>
+          <Card className="kpi-card border-0 fade-in">
+            <Card.Body className="kpi-card-body">
+              <div className="flex-grow-1">
+                <div className="kpi-label">
+                  <i className="bi bi-lightning-charge me-1"></i>
+                  Voltaje
+                </div>
+                <div className="kpi-value text-primary">
+                  {fmtNum(voltaje, 2, " V")}
+                </div>
                 <div
-                  className={`small ${
+                  className={`kpi-change ${
                     dVolt == null
                       ? "text-muted"
                       : dVolt >= 0
@@ -402,30 +537,33 @@ export default function DashboardUsuario() {
                       : "text-danger"
                   }`}
                 >
-                  {arrow(dVolt)} {dVolt == null ? "—" : fmtNum(dVolt, 2, " V")}{" "}
-                  vs. último
+                  {arrow(dVolt)} {dVolt == null ? "—" : fmtNum(dVolt, 2, " V")} vs. anterior
                 </div>
               </div>
-              <div style={{ fontSize: 30 }}>🔌</div>
+              <div className="kpi-icon text-primary">🔌</div>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col md={4}>
-          <Card className="shadow-sm h-100 border-0">
-            <Card.Body className="d-flex justify-content-between align-items-center">
-              <div>
-                <div className="text-muted small mb-1">Batería</div>
-                <div className="fs-4 fw-bold">
-                  {fmtNum(bateria, 0, " %")}{" "}
-                  {bateria != null && bateria < 20 && (
-                    <Badge bg="warning" text="dark">
-                      Baja
-                    </Badge>
-                  )}
+        <Col xs={12} md={4}>
+          <Card className="kpi-card border-0 fade-in">
+            <Card.Body className="kpi-card-body">
+              <div className="flex-grow-1">
+                <div className="kpi-label">
+                  <i className="bi bi-battery-charging me-1"></i>
+                  Batería
                 </div>
+                <div className="kpi-value text-success">
+                  {fmtNum(bateria, 0, " %")}
+                </div>
+                {bateria != null && bateria < 20 && (
+                  <Badge bg="warning" text="dark" className="mt-1">
+                    <i className="bi bi-exclamation-triangle me-1"></i>
+                    Nivel bajo
+                  </Badge>
+                )}
                 <div
-                  className={`small ${
+                  className={`kpi-change ${
                     dBat == null
                       ? "text-muted"
                       : dBat >= 0
@@ -433,23 +571,27 @@ export default function DashboardUsuario() {
                       : "text-danger"
                   }`}
                 >
-                  {arrow(dBat)} {dBat == null ? "—" : fmtNum(dBat, 0, " %")} vs.
-                  último
+                  {arrow(dBat)} {dBat == null ? "—" : fmtNum(dBat, 0, " %")} vs. anterior
                 </div>
               </div>
-              <div style={{ fontSize: 30 }}>🔋</div>
+              <div className="kpi-icon text-success">🔋</div>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col md={4}>
-          <Card className="shadow-sm h-100 border-0">
-            <Card.Body className="d-flex justify-content-between align-items-center">
-              <div>
-                <div className="text-muted small mb-1">Consumo</div>
-                <div className="fs-4 fw-bold">{fmtNum(consumo, 1, " W")}</div>
+        <Col xs={12} md={4}>
+          <Card className="kpi-card border-0 fade-in">
+            <Card.Body className="kpi-card-body">
+              <div className="flex-grow-1">
+                <div className="kpi-label">
+                  <i className="bi bi-speedometer me-1"></i>
+                  Consumo
+                </div>
+                <div className="kpi-value text-warning">
+                  {fmtNum(consumo, 1, " W")}
+                </div>
                 <div
-                  className={`small ${
+                  className={`kpi-change ${
                     dCon == null
                       ? "text-muted"
                       : dCon >= 0
@@ -457,11 +599,10 @@ export default function DashboardUsuario() {
                       : "text-success"
                   }`}
                 >
-                  {arrow(dCon)} {dCon == null ? "—" : fmtNum(dCon, 1, " W")} vs.
-                  último
+                  {arrow(dCon)} {dCon == null ? "—" : fmtNum(dCon, 1, " W")} vs. anterior
                 </div>
               </div>
-              <div style={{ fontSize: 30 }}>⚡</div>
+              <div className="kpi-icon text-warning">⚡</div>
             </Card.Body>
           </Card>
         </Col>
@@ -485,27 +626,36 @@ export default function DashboardUsuario() {
         </Modal.Footer>
       </Modal>
 
-      {/* Gráfico principal */}
-      <Card className="shadow-sm mb-4 border-0" style={{ minHeight: 420 }}>
+      {/* Gráfico principal - Optimizado para móvil */}
+      <Card className="chart-card border-0 fade-in">
         <Card.Body>
+          <div className="d-flex align-items-center justify-content-between mb-3">
+            <h5 className="mb-0" style={{ fontWeight: 700 }}>
+              <i className="bi bi-graph-up me-2"></i>
+              Monitoreo en tiempo real
+            </h5>
+          </div>
+          
           {cargando ? (
-            <div
-              className="d-flex align-items-center justify-content-center"
-              style={{ minHeight: 320 }}
-            >
-              <Spinner animation="border" />
+            <div className="loading-container d-flex flex-column align-items-center justify-content-center">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Cargando...</span>
+              </div>
+              <p className="text-muted mt-3 mb-0">Cargando datos...</p>
             </div>
           ) : lecturas.length === 0 ? (
-            <p className="text-center text-muted m-0">
-              No hay datos para mostrar.
-            </p>
+            <Alert variant="info" className="text-center">
+              <i className="bi bi-info-circle me-2"></i>
+              No hay datos disponibles para mostrar
+            </Alert>
           ) : (
             <>
-              <div style={{ height: 340 }}>
+              <div className="chart-container">
                 <Line data={lineData} options={opcionesGrafico} />
               </div>
-              <div className="text-end mt-2">
-                <small className="text-muted">
+              <div className="text-center text-md-end mt-3">
+                <small className="text-muted d-flex align-items-center justify-content-center justify-content-md-end gap-2">
+                  <i className="bi bi-clock-history"></i>
                   Última actualización: {ultimaFecha}
                 </small>
               </div>
@@ -514,105 +664,184 @@ export default function DashboardUsuario() {
         </Card.Body>
       </Card>
 
-      {/* Alertas recientes */}
-      <Card className="shadow-sm mb-4 border-0">
+      {/* Alertas recientes - Optimizado para móvil */}
+      <Card className="alerts-card border-0 fade-in">
         <Card.Body>
-          <div className="d-flex align-items-center justify-content-between mb-2">
-            <h5 className="mb-0">Alertas recientes</h5>
-            <span className="text-muted small">
-              Muestra {alertas.length || 0}{" "}
-              {alertas.length === 1 ? "alerta" : "alertas"}
-            </span>
+          <div className="d-flex align-items-center justify-content-between mb-3">
+            <h5 className="mb-0" style={{ fontWeight: 700 }}>
+              <i className="bi bi-bell me-2"></i>
+              Alertas recientes
+            </h5>
+            <Badge bg="secondary" pill>
+              {alertas.length || 0}
+            </Badge>
           </div>
+          
           {alertas.length === 0 ? (
-            <p className="text-muted m-0">No hay alertas en este momento.</p>
+            <Alert variant="success" className="mb-0">
+              <i className="bi bi-check-circle me-2"></i>
+              Todo funciona correctamente. No hay alertas pendientes.
+            </Alert>
           ) : (
-            <ul className="list-group">
-              {alertas.map((a, i) => (
-                <li
-                  key={i}
-                  className="list-group-item d-flex justify-content-between align-items-center"
-                >
-                  <div>
-                    <strong>{a?.mensaje || "Alerta"}</strong>{" "}
-                    <span className="text-muted">
-                      •{" "}
-                      {a?.fecha_lectura
-                        ? new Date(a.fecha_lectura).toLocaleString()
-                        : "Sin fecha"}
-                    </span>
-                    <div className="small">
-                      Voltaje: {fmtNum(a?.voltaje, 2, " V")} · Batería:{" "}
-                      {fmtNum(a?.bateria, 0, " %")} · Consumo:{" "}
-                      {fmtNum(a?.consumo, 1, " W")}
+            <div className="d-flex flex-column gap-2">
+              {alertas.slice(0, 5).map((a, i) => (
+                <div key={i} className="alert-item">
+                  <div className="alert-item-header">
+                    <div className="alert-item-title">
+                      <i className="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                      {a?.mensaje || "Alerta del sistema"}
+                    </div>
+                    <Badge bg="warning" text="dark" style={{ fontSize: '0.75rem' }}>
+                      Atención
+                    </Badge>
+                  </div>
+                  
+                  <div className="alert-item-date">
+                    <i className="bi bi-clock me-1"></i>
+                    {a?.fecha_lectura
+                      ? new Date(a.fecha_lectura).toLocaleString('es-ES', {
+                          day: '2-digit',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                      : "Sin fecha"}
+                  </div>
+                  
+                  <div className="alert-item-details">
+                    <div className="d-flex flex-wrap gap-3 mt-2">
+                      <span>⚡ {fmtNum(a?.voltaje, 2, " V")}</span>
+                      <span>🔋 {fmtNum(a?.bateria, 0, " %")}</span>
+                      <span>📊 {fmtNum(a?.consumo, 1, " W")}</span>
                     </div>
                   </div>
-                  <Badge bg="warning" text="dark">
-                    Atención
-                  </Badge>
-                </li>
+                </div>
               ))}
-            </ul>
+              {alertas.length > 5 && (
+                <div className="text-center mt-2">
+                  <small className="text-muted">
+                    Mostrando 5 de {alertas.length} alertas
+                  </small>
+                </div>
+              )}
+            </div>
           )}
         </Card.Body>
       </Card>
 
-      {/* Perfil (básico) */}
-      <Card className="shadow-sm mb-4 border-0" style={{ maxWidth: 740 }}>
+      {/* Perfil (básico) - Optimizado para móvil */}
+      <Card className="profile-card border-0 fade-in">
         <Card.Body>
-          <h5 className="mb-3">Mi perfil</h5>
+          <h5 className="mb-3" style={{ fontWeight: 700 }}>
+            <i className="bi bi-person-circle me-2"></i>
+            Mi perfil
+          </h5>
           {perfil ? (
             <Row>
-              <Col md={6}>
-                <p className="mb-1">
-                  <strong>Nombre:</strong>{" "}
-                  {perfil.nombre_completo || "—"}
-                </p>
-                <p className="mb-1">
-                  <strong>Email:</strong> {perfil.email || "—"}
-                </p>
+              <Col xs={12} md={6} className="mb-3 mb-md-0">
+                <div className="mb-2">
+                  <small className="text-muted d-block mb-1">
+                    <i className="bi bi-person me-1"></i>
+                    Nombre completo
+                  </small>
+                  <strong>{perfil.nombre_completo || "—"}</strong>
+                </div>
+                <div className="mb-2">
+                  <small className="text-muted d-block mb-1">
+                    <i className="bi bi-envelope me-1"></i>
+                    Correo electrónico
+                  </small>
+                  <strong>{perfil.email || "—"}</strong>
+                </div>
               </Col>
-              <Col md={6}>
-                <p className="mb-1">
-                  <strong>Teléfono:</strong> {perfil.telefono || "—"}
-                </p>
-                <p className="mb-1">
-                  <strong>Dirección:</strong> {perfil.direccion || "—"}
-                </p>
+              <Col xs={12} md={6}>
+                <div className="mb-2">
+                  <small className="text-muted d-block mb-1">
+                    <i className="bi bi-telephone me-1"></i>
+                    Teléfono
+                  </small>
+                  <strong>{perfil.telefono || "—"}</strong>
+                </div>
+                <div className="mb-2">
+                  <small className="text-muted d-block mb-1">
+                    <i className="bi bi-geo-alt me-1"></i>
+                    Dirección
+                  </small>
+                  <strong>{perfil.direccion || "—"}</strong>
+                </div>
               </Col>
             </Row>
           ) : (
-            <p className="text-muted m-0">Cargando perfil…</p>
+            <div className="text-center py-3">
+              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              <span className="text-muted">Cargando perfil...</span>
+            </div>
           )}
         </Card.Body>
       </Card>
 
-      {/* Consejos y soporte */}
-      <Row className="g-3">
-        <Col md={6}>
-          <Card className="shadow-sm border-0 h-100">
+      {/* Consejos y soporte - Optimizado para móvil */}
+      <Row className="g-3 mb-4">
+        <Col xs={12} md={6}>
+          <Card className="info-card border-0 fade-in">
             <Card.Body>
-              <h5 className="mb-3">Consejos para ahorrar energía</h5>
-              <ul className="mb-0">
-                <li>Apaga dispositivos cuando no los uses.</li>
-                <li>Usa equipos eficientes y horarios de baja demanda.</li>
-                <li>Realiza mantenimiento preventivo regularmente.</li>
+              <h5 className="mb-3" style={{ fontWeight: 700 }}>
+                <i className="bi bi-lightbulb me-2"></i>
+                Consejos de ahorro
+              </h5>
+              <ul className="mb-0" style={{ paddingLeft: '1.25rem' }}>
+                <li className="mb-2">
+                  <strong>Apaga dispositivos</strong> cuando no los uses para reducir consumo.
+                </li>
+                <li className="mb-2">
+                  <strong>Equipos eficientes</strong> en horarios de baja demanda.
+                </li>
+                <li className="mb-0">
+                  <strong>Mantenimiento preventivo</strong> para máximo rendimiento.
+                </li>
               </ul>
             </Card.Body>
           </Card>
         </Col>
-        <Col md={6}>
-          <Card className="shadow-sm border-0 h-100">
+        <Col xs={12} md={6}>
+          <Card className="info-card border-0 fade-in">
             <Card.Body>
-              <h5 className="mb-3">Soporte técnico</h5>
-              <p className="mb-1">
-                ¿Necesitas ayuda? Escríbenos a{" "}
-                {/* mailto que abre el cliente de correo */}
-                <a href={soporteHref}>{SOPORTE_EMAIL}</a>.
-              </p>
-              <p className="mb-0">
-                Teléfono: <strong>123-456-789</strong>
-              </p>
+              <h5 className="mb-3" style={{ fontWeight: 700 }}>
+                <i className="bi bi-headset me-2"></i>
+                Soporte técnico
+              </h5>
+              <div className="mb-3">
+                <small className="text-muted d-block mb-1">
+                  <i className="bi bi-envelope-at me-1"></i>
+                  Correo electrónico
+                </small>
+                <a 
+                  href={soporteHref} 
+                  className="text-decoration-none fw-bold"
+                  style={{ 
+                    color: '#007bff',
+                    fontSize: '0.95rem'
+                  }}
+                >
+                  {SOPORTE_EMAIL}
+                </a>
+              </div>
+              <div>
+                <small className="text-muted d-block mb-1">
+                  <i className="bi bi-telephone-forward me-1"></i>
+                  Teléfono
+                </small>
+                <a 
+                  href="tel:123456789" 
+                  className="text-decoration-none fw-bold"
+                  style={{ 
+                    color: '#007bff',
+                    fontSize: '0.95rem'
+                  }}
+                >
+                  123-456-789
+                </a>
+              </div>
             </Card.Body>
           </Card>
         </Col>

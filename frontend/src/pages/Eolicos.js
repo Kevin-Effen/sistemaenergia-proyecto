@@ -20,18 +20,26 @@ const money = (v) =>
   });
 
 /* =========== Modal genérico =========== */
-function Modal({ open, title, children, onClose, footer }) {
+const Modal = React.memo(({ open, title, children, onClose, footer }) => {
   if (!open) return null;
+  
   return (
-    <>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1050 }}>
       <div className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true">
         <div className="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down">
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title">{title}</h5>
-              <button type="button" className="btn-close" onClick={onClose} aria-label="Cerrar" />
+              <button 
+                type="button" 
+                className="btn-close" 
+                onClick={onClose} 
+                aria-label="Cerrar"
+              />
             </div>
-            <div className="modal-body">{children}</div>
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              {children}
+            </div>
             <div className="modal-footer flex-wrap gap-2">
               {footer}
               <button className="btn btn-outline-secondary" onClick={onClose}>
@@ -41,10 +49,14 @@ function Modal({ open, title, children, onClose, footer }) {
           </div>
         </div>
       </div>
-      <div className="modal-backdrop fade show" onClick={onClose} />
-    </>
+      <div 
+        className="modal-backdrop fade show" 
+        onClick={onClose}
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
+      />
+    </div>
   );
-}
+});
 
 /* =========== Página =========== */
 export default function Eolicos() {
@@ -154,7 +166,14 @@ export default function Eolicos() {
       setError("");
       const [rEol, rUsr] = await Promise.all([api.get("/eolicos"), api.get("/usuarios")]);
       setLista(Array.isArray(rEol.data) ? rEol.data : []);
-      setUsuarios(Array.isArray(rUsr.data) ? rUsr.data : []);
+      
+      // Eliminar usuarios duplicados por id_usuario
+      const usuariosUnicos = Array.isArray(rUsr.data) 
+        ? rUsr.data.filter((usuario, index, self) => 
+            index === self.findIndex((u) => u.id_usuario === usuario.id_usuario)
+          )
+        : [];
+      setUsuarios(usuariosUnicos);
     } catch (e) {
       console.error("cargarTodo error:", e?.response || e);
       setError("No se pudo cargar la información.");
@@ -164,6 +183,19 @@ export default function Eolicos() {
       setCargando(false);
     }
   };
+
+  // Memoizar usuarios para evitar re-renders innecesarios y problemas de reconciliación
+  const usuariosMemoizados = useMemo(() => {
+    return usuarios.map(u => ({
+      id_usuario: u.id_usuario,
+      usuario: u.usuario,
+      nombres: u.nombres,
+      primer_apellido: u.primer_apellido,
+      segundo_apellido: u.segundo_apellido,
+      ci: u.ci,
+      nombreCompleto: [u.nombres, u.primer_apellido, u.segundo_apellido].filter(Boolean).join(" ") || u.usuario,
+    }));
+  }, [usuarios]);
 
   useEffect(() => {
     cargarTodo();
@@ -219,12 +251,8 @@ export default function Eolicos() {
 
   /* Acciones */
   const crearEolico = async () => {
-    const codigo = (nuevo.codigo || "").trim().toUpperCase();
-    if (!codigo) return alert("Ingresa un código.");
-    if (codigo.length < 3) return alert("El código debe tener al menos 3 caracteres.");
-
+    // El código ahora se genera automáticamente en el backend
     const payload = {
-      codigo,
       tarifa_mes: Number(nuevo.tarifa_mes || 0),
       costo_instalacion: Number(nuevo.costo_instalacion || 0),
       deposito: Number(nuevo.deposito || 0),
@@ -233,7 +261,12 @@ export default function Eolicos() {
 
     try {
       setCreando(true);
-      await api.post("/eolicos", payload);
+      const response = await api.post("/eolicos", payload);
+      
+      // Mostrar el código generado
+      const codigoGenerado = response.data?.codigo || 'N/A';
+      alert(`✅ Equipo creado exitosamente!\n\nCódigo asignado: ${codigoGenerado}`);
+      
       setNuevo({
         codigo: "",
         tarifa_mes: "",
@@ -241,12 +274,19 @@ export default function Eolicos() {
         deposito: "",
         costo_operativo_dia: "",
       });
+      setCreando(false);
       setOpenNuevo(false);
-      await cargarTodo();
+      
+      // Esperar a que el modal se desmonte antes de recargar
+      setTimeout(async () => {
+        await cargarTodo();
+        setTimeout(() => {
+          alert("✅ Equipo creado exitosamente");
+        }, 100);
+      }, 300);
+      
     } catch (e) {
-      if (e?.response?.status === 409) alert("Ese código ya existe.");
-      else showBackendError(e, "No se pudo crear el equipo.");
-    } finally {
+      showBackendError(e, "No se pudo crear el equipo.");
       setCreando(false);
     }
   };
@@ -534,70 +574,135 @@ export default function Eolicos() {
       setProcesandoAlquiler(true);
       setRowBusy(id_eolico, "asignar");
 
-      // Paso 1: Asignar equipo al usuario
-      await api.put(`/eolicos/${id_eolico}/asignar`, { 
-        usuario_id: Number(alquilerForm.usuario_id) 
-      });
+      console.log("🔄 Iniciando proceso de creación de alquiler...");
+      console.log("📊 Datos:", { id_eolico, usuario_id: alquilerForm.usuario_id, costoInstalacion, tarifaMensual, deposito });
 
-      // Paso 2: Actualizar costos del equipo
-      await api.put(`/eolicos/${id_eolico}/costos`, {
-        tarifa_mes: tarifaMensual,
-        costo_instalacion: costoInstalacion,
-        deposito: deposito,
-        costo_operativo_dia: Number(equipoAlquiler.costo_operativo_dia) || 0,
-        aplicar_alquiler_activo: true,
-      });
+      // ✅ CORRECCIÓN: Cambiar orden de operaciones para evitar race condition
+      
+      // Paso 1: Actualizar costos del equipo PRIMERO (antes de asignar)
+      console.log("⏳ Paso 1: Actualizando costos del equipo...");
+      try {
+        await api.put(`/eolicos/${id_eolico}/costos`, {
+          tarifa_mes: tarifaMensual,
+          costo_instalacion: costoInstalacion,
+          deposito: deposito,
+          costo_operativo_dia: Number(equipoAlquiler.costo_operativo_dia) || 0,
+          aplicar_alquiler_activo: false,
+        });
+        console.log("✅ Paso 1 completado: Costos del equipo actualizados");
+      } catch (error) {
+        console.error("❌ Error en Paso 1:", error);
+        throw new Error("Error al actualizar costos del equipo: " + (error.response?.data?.mensaje || error.message));
+      }
 
-      // Paso 3: Si está habilitada la generación automática de cuotas
+      // Paso 2: Asignar equipo al usuario (esto crea el alquiler con estado 'activo')
+      console.log("⏳ Paso 2: Asignando equipo al usuario...");
+      try {
+        await api.put(`/eolicos/${id_eolico}/asignar`, { 
+          usuario_id: Number(alquilerForm.usuario_id) 
+        });
+        console.log("✅ Paso 2 completado: Equipo asignado, alquiler creado");
+      } catch (error) {
+        console.error("❌ Error en Paso 2:", error);
+        throw new Error("Error al asignar equipo: " + (error.response?.data?.mensaje || error.message));
+      }
+      
+      // Paso 3: Actualizar costos en el alquiler recién creado
+      console.log("⏳ Paso 3: Actualizando costos en el alquiler...");
+      try {
+        await api.put(`/eolicos/${id_eolico}/costos`, {
+          tarifa_mes: tarifaMensual,
+          costo_instalacion: costoInstalacion,
+          deposito: deposito,
+          costo_operativo_dia: Number(equipoAlquiler.costo_operativo_dia) || 0,
+          aplicar_alquiler_activo: true,
+        });
+        console.log("✅ Paso 3 completado: Costos del alquiler sincronizados");
+      } catch (error) {
+        console.error("❌ Error en Paso 3:", error);
+        throw new Error("Error al sincronizar costos del alquiler: " + (error.response?.data?.mensaje || error.message));
+      }
+
+      // Paso 4: Si está habilitada la generación automática de cuotas
       if (alquilerForm.generar_cuotas) {
-        // Generar primera cuota (Instalación + Primer mes)
-        // NOTA: Para concepto 'instalacion', el backend calcula monto_total automáticamente
-        // pero como queremos instalación + primer mes, enviamos el monto_total explícito
-        const montoPrimeraCuota = costoInstalacion + tarifaMensual;
+        console.log("⏳ Paso 4: Generando cuotas automáticas...");
         
+        const montoPrimeraCuota = costoInstalacion + tarifaMensual;
         const fechaInicio = new Date(alquilerForm.fecha_inicio);
         const fechaVencimiento = new Date(fechaInicio);
-        fechaVencimiento.setDate(fechaVencimiento.getDate() + 7); // 7 días para pagar
+        fechaVencimiento.setDate(fechaVencimiento.getDate() + 7);
         
         // Primera cuota: Instalación + Primer mes
         if (montoPrimeraCuota > 0) {
-          await api.post(`/eolicos/${id_eolico}/cuotas/generar`, {
-            concepto: "instalacion",
-            numero_cuotas: 1,
-            periodicidad: "mensual", // Backend solo acepta: mensual, semanal, diaria
-            primera_fecha: fechaVencimiento.toISOString().slice(0, 10),
-            monto_total: montoPrimeraCuota,
-            descripcion: `Instalación (Bs ${costoInstalacion.toFixed(2)}) + Primer mes (Bs ${tarifaMensual.toFixed(2)})`,
-          });
+          console.log("⏳ Paso 4A: Generando cuota de instalación + primer mes...");
+          try {
+            await api.post(`/eolicos/${id_eolico}/cuotas/generar`, {
+              concepto: "instalacion",
+              numero_cuotas: 1,
+              periodicidad: "mensual",
+              primera_fecha: fechaVencimiento.toISOString().slice(0, 10),
+              monto_total: montoPrimeraCuota,
+              descripcion: `Instalación (Bs ${costoInstalacion.toFixed(2)}) + Primer mes (Bs ${tarifaMensual.toFixed(2)})`,
+            });
+            console.log("✅ Paso 4A completado: Cuota inicial generada");
+          } catch (error) {
+            console.error("❌ Error en Paso 4A:", error);
+            console.error("Detalles del error:", error.response?.data);
+            throw new Error("Error al generar cuota de instalación: " + (error.response?.data?.mensaje || error.message));
+          }
         }
 
         // Generar cuotas mensuales (próximos 12 meses)
-        // Para concepto 'tarifa', NO enviamos monto_total, el backend lo calcula automáticamente
         if (tarifaMensual > 0) {
+          console.log("⏳ Paso 4B: Generando 12 cuotas mensuales...");
           const fechaSegundaCuota = new Date(fechaInicio);
           fechaSegundaCuota.setMonth(fechaSegundaCuota.getMonth() + 1);
           
-          await api.post(`/eolicos/${id_eolico}/cuotas/generar`, {
-            concepto: "tarifa",
-            numero_cuotas: 12,
-            periodicidad: "mensual",
-            primera_fecha: fechaSegundaCuota.toISOString().slice(0, 10),
-            // NO enviamos monto_total - el backend lo calcula como: tarifa_mes * 12
-            descripcion: "Alquiler mensual del sistema eólico",
-          });
+          try {
+            await api.post(`/eolicos/${id_eolico}/cuotas/generar`, {
+              concepto: "tarifa",
+              numero_cuotas: 12,
+              periodicidad: "mensual",
+              primera_fecha: fechaSegundaCuota.toISOString().slice(0, 10),
+              descripcion: "Alquiler mensual del sistema eólico",
+            });
+            console.log("✅ Paso 4B completado: 12 cuotas mensuales generadas");
+          } catch (error) {
+            console.error("❌ Error en Paso 4B:", error);
+            console.error("Detalles del error:", error.response?.data);
+            throw new Error("Error al generar cuotas mensuales: " + (error.response?.data?.mensaje || error.message));
+          }
         }
       }
 
-      // Cerrar modal y recargar
-      setOpenModalAlquiler(false);
-      await cargarTodo();
+      // ✅ CORRECCIÓN CRÍTICA: Cerrar modal primero, luego recargar
+      console.log("✅ Proceso completado exitosamente");
+      console.log("🔄 Cerrando modal...");
       
-      alert("✅ Alquiler creado exitosamente.\n" + 
-            (alquilerForm.generar_cuotas ? "Se generaron las cuotas automáticamente." : ""));
+      setOpenModalAlquiler(false);
+      setProcesandoAlquiler(false);
+      clearRowBusy(id_eolico);
+      
+      // Esperar a que el modal se desmonte completamente antes de recargar
+      setTimeout(async () => {
+        try {
+          console.log("🔄 Recargando datos...");
+          await cargarTodo();
+          console.log("✅ Recarga completada");
+          
+          // Mostrar mensaje DESPUÉS de recargar
+          setTimeout(() => {
+            alert("✅ Alquiler creado exitosamente.\n" + 
+                  (alquilerForm.generar_cuotas ? "Se generaron las cuotas automáticamente." : ""));
+          }, 100);
+        } catch (err) {
+          console.error("Error al recargar:", err);
+        }
+      }, 300);
 
     } catch (e) {
+      console.error("❌ Error general en creación de alquiler:", e);
       showBackendError(e, "No se pudo crear el alquiler.");
-    } finally {
       setProcesandoAlquiler(false);
       clearRowBusy(id_eolico);
     }
@@ -668,13 +773,19 @@ export default function Eolicos() {
         setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
       }
 
+      setProcesandoPago(false);
       setOpenModalPago(false);
-      await cargarTodo();
-      alert("✅ Pago registrado exitosamente.\nSe generó el recibo PDF.");
+      
+      // Esperar a que el modal se desmonte antes de recargar
+      setTimeout(async () => {
+        await cargarTodo();
+        setTimeout(() => {
+          alert("✅ Pago registrado exitosamente.\nSe generó el recibo PDF.");
+        }, 100);
+      }, 300);
 
     } catch (e) {
       showBackendError(e, "No se pudo registrar el pago.");
-    } finally {
       setProcesandoPago(false);
     }
   };
@@ -706,13 +817,19 @@ export default function Eolicos() {
         usuario_id: Number(nuevoUsuarioId) 
       });
 
+      clearRowBusy(equipoCambio?.id_eolico);
       setOpenModalCambioUsuario(false);
-      await cargarTodo();
-      alert("✅ Usuario cambiado exitosamente");
+      
+      // Esperar a que el modal se desmonte antes de recargar
+      setTimeout(async () => {
+        await cargarTodo();
+        setTimeout(() => {
+          alert("✅ Usuario cambiado exitosamente");
+        }, 100);
+      }, 300);
 
     } catch (e) {
       showBackendError(e, "No se pudo cambiar el usuario.");
-    } finally {
       clearRowBusy(equipoCambio?.id_eolico);
     }
   };
@@ -780,14 +897,15 @@ export default function Eolicos() {
               <tbody>
                 {listaFiltrada.map((r, idx) => {
                   const nro = idx + 1;
-                  const asignado = !!r.usuario_id;
+                  // Verificar si está asignado revisando usuario_id Y que tenga datos del usuario
+                  const asignado = !!(r.usuario_id && r.usuario_id > 0);
                   const busyToggle = isBusy(r.id_eolico, "toggle");
 
                   return (
-                    <tr key={r.id_eolico}>
+                    <tr key={`eolico-${r.id_eolico}-${r.codigo}-${r.usuario_id || 'sin'}`}>
                       {/* Número */}
                       <td className="text-center">
-                        <span className="badge bg-light text-dark border">{nro}</span>
+                        <div className="badge bg-light text-dark border">{nro}</div>
                       </td>
 
                       {/* Equipo - Código y estado de habilitación */}
@@ -798,15 +916,15 @@ export default function Eolicos() {
                             <strong className="text-dark">{r.codigo}</strong>
                           </div>
                           {r.habilitado ? (
-                            <span className="badge bg-success-subtle text-success border border-success">
+                            <div className="badge bg-success-subtle text-success border border-success">
                               <i className="bi bi-check-circle-fill me-1"></i>
                               Habilitado
-                            </span>
+                            </div>
                           ) : (
-                            <span className="badge bg-warning-subtle text-warning border border-warning">
+                            <div className="badge bg-warning-subtle text-warning border border-warning">
                               <i className="bi bi-exclamation-triangle-fill me-1"></i>
                               No habilitado
-                            </span>
+                            </div>
                           )}
                         </div>
                       </td>
@@ -817,7 +935,7 @@ export default function Eolicos() {
                           <div className="d-flex flex-column gap-1">
                             <div className="d-flex align-items-center gap-2">
                               <i className="bi bi-person-circle text-success"></i>
-                              <span className="fw-semibold text-dark">{nombreUsuario(r)}</span>
+                              <div className="fw-semibold text-dark">{nombreUsuario(r)}</div>
                             </div>
                             <small className="text-muted">
                               <i className="bi bi-at me-1"></i>
@@ -848,20 +966,20 @@ export default function Eolicos() {
                             />
                             <label className="form-check-label" htmlFor={`sw-${r.id_eolico}`}>
                               {busyToggle ? (
-                                <span className="text-muted">
-                                  <span className="spinner-border spinner-border-sm me-1"></span>
+                                <div className="text-muted">
+                                  <i className="spinner-border spinner-border-sm me-1"></i>
                                   Guardando…
-                                </span>
+                                </div>
                               ) : r.activo ? (
-                                <span className="badge bg-success">
+                                <div className="badge bg-success">
                                   <i className="bi bi-power me-1"></i>
                                   Activo
-                                </span>
+                                </div>
                               ) : (
-                                <span className="badge bg-secondary">
+                                <div className="badge bg-secondary">
                                   <i className="bi bi-power me-1"></i>
                                   Inactivo
-                                </span>
+                                </div>
                               )}
                             </label>
                           </div>
@@ -915,8 +1033,10 @@ export default function Eolicos() {
         title="Asignar equipo y crear alquiler"
         style={{ fontSize: '0.85rem', padding: '0.4rem 0.6rem' }}
       >
-        <i className="bi bi-person-plus-fill me-1"></i>
-        {isBusy(r.id_eolico, "asignar") ? "Procesando…" : "Asignar"}
+        <span>
+          <i className="bi bi-person-plus-fill me-1"></i>
+          {isBusy(r.id_eolico, "asignar") ? "Procesando…" : "Asignar"}
+        </span>
       </button>
     ) : (
       <button
@@ -926,8 +1046,10 @@ export default function Eolicos() {
         title="Desasignar equipo del usuario"
         style={{ fontSize: '0.85rem', padding: '0.4rem 0.6rem' }}
       >
-        <i className="bi bi-person-dash-fill me-1"></i>
-        {isBusy(r.id_eolico, "desasignar") ? "Procesando…" : "Desasignar"}
+        <span>
+          <i className="bi bi-person-dash-fill me-1"></i>
+          {isBusy(r.id_eolico, "desasignar") ? "Procesando…" : "Desasignar"}
+        </span>
       </button>
     )}
 
@@ -979,8 +1101,10 @@ export default function Eolicos() {
             onClick={() => verCuotas(r.id_eolico)}
             disabled={isBusy(r.id_eolico, "cuotas-lista")}
           >
-            <i className="bi bi-list-check me-2"></i>
-            {isBusy(r.id_eolico, "cuotas-lista") ? "Cargando…" : "Ver Cuotas"}
+            <span>
+              <i className="bi bi-list-check me-2"></i>
+              {isBusy(r.id_eolico, "cuotas-lista") ? "Cargando…" : "Ver Cuotas"}
+            </span>
           </button>
         </li>
         <li>
@@ -989,8 +1113,10 @@ export default function Eolicos() {
             onClick={() => abrirGenerarPlan(r)}
             disabled={isBusy(r.id_eolico, "cuotas-generar")}
           >
-            <i className="bi bi-calendar-plus me-2"></i>
-            {isBusy(r.id_eolico, "cuotas-generar") ? "Generando…" : "Generar Plan de Cuotas"}
+            <span>
+              <i className="bi bi-calendar-plus me-2"></i>
+              {isBusy(r.id_eolico, "cuotas-generar") ? "Generando…" : "Generar Plan de Cuotas"}
+            </span>
           </button>
         </li>
         <li>
@@ -1045,8 +1171,10 @@ export default function Eolicos() {
             }}
             disabled={isBusy(r.id_eolico, "pdf")}
           >
-            <i className="bi bi-receipt me-2"></i>
-            {isBusy(r.id_eolico, "pdf") ? "Generando…" : "Recibo de Pago (PDF)"}
+            <span>
+              <i className="bi bi-receipt me-2"></i>
+              {isBusy(r.id_eolico, "pdf") ? "Generando…" : "Recibo de Pago (PDF)"}
+            </span>
           </button>
         </li>
         <li>
@@ -1055,8 +1183,10 @@ export default function Eolicos() {
             onClick={() => abrirPDFCuotas(r.id_eolico, r.codigo)}
             disabled={isBusy(r.id_eolico, "cuotas-pdf")}
           >
-            <i className="bi bi-file-pdf me-2"></i>
-            {isBusy(r.id_eolico, "cuotas-pdf") ? "Generando…" : "Plan de Cuotas (PDF)"}
+            <span>
+              <i className="bi bi-file-pdf me-2"></i>
+              {isBusy(r.id_eolico, "cuotas-pdf") ? "Generando…" : "Plan de Cuotas (PDF)"}
+            </span>
           </button>
         </li>
         
@@ -1132,12 +1262,20 @@ export default function Eolicos() {
             <label className="form-label">Código único</label>
             <input
               className="form-control"
-              placeholder="Ej: EOL-0001"
-              value={nuevo.codigo}
-              onChange={(e) => setNuevo((s) => ({ ...s, codigo: e.target.value.toUpperCase() }))}
-              maxLength={20}
-              required
+              placeholder="Se generará automáticamente (Ej: 0001, 0002, 0003...)"
+              value="Se asignará automáticamente al crear"
+              readOnly
+              disabled
+              style={{ 
+                backgroundColor: '#e9ecef', 
+                cursor: 'not-allowed',
+                fontStyle: 'italic',
+                color: '#6c757d'
+              }}
             />
+            <small className="text-muted">
+              ℹ️ El código se genera automáticamente de forma secuencial
+            </small>
           </div>
           <div className="col-6 col-md-3">
             <label className="form-label">Tarifa mensual (Bs)</label>
@@ -1296,11 +1434,11 @@ export default function Eolicos() {
         title={`Generar plan de cuotas — ${equipoPlan?.codigo ?? ""}`}
         onClose={() => setOpenPlan(false)}
         footer={
-          <>
+          <span>
             <button className="btn btn-success" onClick={enviarGenerarPlan} disabled={guardandoPlan}>
               {guardandoPlan ? "Guardando…" : "Crear plan"}
             </button>
-          </>
+          </span>
         }
       >
         <div className="row g-3">
@@ -1397,7 +1535,7 @@ export default function Eolicos() {
         title={`Plan de cuotas — ${alquilerInfo?.codigo ?? ""}`}
         onClose={() => setOpenListaCuotas(false)}
         footer={
-          <>
+          <span>
             <button
               className="btn btn-outline-dark"
               onClick={() => abrirPDFCuotas(alquilerInfo?.eolico_id || 0, alquilerInfo?.codigo)}
@@ -1405,7 +1543,7 @@ export default function Eolicos() {
             >
               Cuotas PDF
             </button>
-          </>
+          </span>
         }
       >
         {loadingCuotas ? (
@@ -1455,9 +1593,9 @@ export default function Eolicos() {
                       <td className="text-end">{money(c.monto)}</td>
                       <td>
                         {c.pagado ? (
-                          <span className="badge bg-success">Pagado</span>
+                          <div className="badge bg-success">Pagado</div>
                         ) : (
-                          <span className="badge bg-warning text-dark">Pendiente</span>
+                          <div className="badge bg-warning text-dark">Pendiente</div>
                         )}
                       </td>
                       <td>
@@ -1516,7 +1654,7 @@ export default function Eolicos() {
                       const pagado = listaCuotas.filter((c) => c.pagado).reduce((s, c) => s + Number(c.monto || 0), 0);
                       const pendiente = total - pagado;
                       return (
-                        <>
+                        <React.Fragment key="totales-cuotas">
                           <tr>
                             <th colSpan="3" className="text-end">
                               TOTAL
@@ -1538,7 +1676,7 @@ export default function Eolicos() {
                             <th className="text-end text-danger">{money(pendiente)}</th>
                             <th colSpan="2"></th>
                           </tr>
-                        </>
+                        </React.Fragment>
                       );
                     })()}
                   </tfoot>
@@ -1557,28 +1695,30 @@ export default function Eolicos() {
         title={`🏠 Crear Alquiler - Equipo ${equipoAlquiler?.codigo || ""}`}
         onClose={() => setOpenModalAlquiler(false)}
         footer={
-          <>
-            <button
-              className="btn btn-success"
-              onClick={crearAlquiler}
-              disabled={procesandoAlquiler}
-            >
-              {procesandoAlquiler ? (
-                <>
-                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                  Procesando...
-                </>
-              ) : (
-                <>
-                  <i className="bi bi-check-circle me-1"></i>
-                  Crear Alquiler
-                </>
-              )}
-            </button>
-          </>
+          <button
+            className="btn btn-success"
+            onClick={crearAlquiler}
+            disabled={procesandoAlquiler || !alquilerForm.usuario_id}
+          >
+            {procesandoAlquiler ? (
+              <>
+                <i className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></i>
+                Procesando...
+              </>
+            ) : (
+              <>
+                <i className="bi bi-check-circle me-1"></i>
+                Crear Alquiler
+              </>
+            )}
+          </button>
         }
       >
-        {equipoAlquiler && (
+        {!equipoAlquiler ? (
+          <div className="text-center py-4">
+            <p className="text-muted">Cargando información del equipo...</p>
+          </div>
+        ) : (
           <div className="row g-3">
             
             {/* Información del equipo */}
@@ -1599,8 +1739,7 @@ export default function Eolicos() {
             <div className="col-12">
               <label className="form-label fw-bold">
                 <i className="bi bi-person me-1"></i>
-                Cliente
-                <span className="text-danger">*</span>
+                Cliente *
               </label>
               <select
                 className="form-select"
@@ -1609,11 +1748,9 @@ export default function Eolicos() {
                 required
               >
                 <option value="">— Seleccionar cliente —</option>
-                {usuarios.map((u) => (
-                  <option key={u.id_usuario} value={u.id_usuario}>
-                    {[u.nombres, u.primer_apellido, u.segundo_apellido].filter(Boolean).join(" ") || u.usuario}
-                    {" - "}
-                    {u.ci || "Sin CI"}
+                {usuariosMemoizados.map((u) => (
+                  <option key={`user-${u.id_usuario}`} value={u.id_usuario}>
+                    {u.nombreCompleto} - {u.ci || "Sin CI"}
                   </option>
                 ))}
               </select>
@@ -1757,7 +1894,7 @@ export default function Eolicos() {
         title={`💰 Registrar Pago - ${equipoPago?.codigo || ""}`}
         onClose={() => setOpenModalPago(false)}
         footer={
-          <>
+          <span>
             <button
               className="btn btn-success"
               onClick={registrarPago}
@@ -1765,7 +1902,7 @@ export default function Eolicos() {
             >
               {procesandoPago ? (
                 <>
-                  <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                  <i className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></i>
                   Procesando...
                 </>
               ) : (
@@ -1775,7 +1912,7 @@ export default function Eolicos() {
                 </>
               )}
             </button>
-          </>
+          </span>
         }
       >
         {equipoPago && (
@@ -1852,16 +1989,18 @@ export default function Eolicos() {
         title={`↔️ Cambiar Usuario - ${equipoCambio?.codigo || ""}`}
         onClose={() => setOpenModalCambioUsuario(false)}
         footer={
-          <>
+          <span>
             <button
               className="btn btn-primary"
               onClick={cambiarUsuario}
               disabled={!nuevoUsuarioId}
             >
-              <i className="bi bi-arrow-left-right me-1"></i>
-              Cambiar Usuario
+              <span>
+                <i className="bi bi-arrow-left-right me-1"></i>
+                Cambiar Usuario
+              </span>
             </button>
-          </>
+          </span>
         }
       >
         {equipoCambio && (
@@ -1891,13 +2030,11 @@ export default function Eolicos() {
                 required
               >
                 <option value="">— Seleccionar nuevo usuario —</option>
-                {usuarios
+                {usuariosMemoizados
                   .filter(u => u.id_usuario !== equipoCambio.usuario_id)
                   .map((u) => (
-                    <option key={u.id_usuario} value={u.id_usuario}>
-                      {[u.nombres, u.primer_apellido, u.segundo_apellido].filter(Boolean).join(" ") || u.usuario}
-                      {" - "}
-                      {u.ci || "Sin CI"}
+                    <option key={`change-user-${u.id_usuario}`} value={u.id_usuario}>
+                      {u.nombreCompleto} - {u.ci || "Sin CI"}
                     </option>
                   ))
                 }

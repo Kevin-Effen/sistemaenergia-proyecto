@@ -28,7 +28,31 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Habilitar CORS explícitamente para el frontend
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
+// Permitir acceso desde cualquier red local (adaptable a diferentes WiFi)
+app.use(cors({ 
+  origin: function (origin, callback) {
+    // Permitir requests sin origin (como apps móviles, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Permitir localhost
+    if (origin.startsWith('http://localhost:')) {
+      return callback(null, true);
+    }
+    
+    // Permitir cualquier IP de red local (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    if (origin.match(/^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)[\d.]+:\d+$/)) {
+      return callback(null, true);
+    }
+    
+    // Permitir CORS_ORIGIN personalizado
+    if (process.env.CORS_ORIGIN && origin === process.env.CORS_ORIGIN) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('No permitido por CORS'));
+  },
+  credentials: true 
+}));
 app.use(express.json());
 
 // Endpoint de salud
@@ -37,13 +61,6 @@ app.get('/health', (_req, res) => res.json({ ok: true, service: 'backend' }));
 /* =========================================================
    Seguridad básica y parsing
 ========================================================= */
-const allowedOrigin = (process.env.CORS_ORIGIN || 'http://localhost:3000').trim();
-app.use(
-  cors({
-    origin: allowedOrigin,
-    credentials: true,
-  })
-);
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -152,7 +169,10 @@ app.post(
         c.contrasena AS hash,
         c.intentos_fallidos,
         c.bloqueado_hasta,
-        r.nombre_rol
+        r.nombre_rol,
+        u.nombres,
+        u.primer_apellido,
+        u.segundo_apellido
       FROM cuentas c
       JOIN usuarios u ON u.cuenta_id = c.id_cuenta
       JOIN roles r    ON r.id_rol    = u.rol_id
@@ -214,7 +234,19 @@ app.post(
       const rol = (u.nombre_rol || '').toLowerCase().trim();
       const token = firmarToken({ cuenta_id: u.id_cuenta, rol });
 
-      res.json({ success: true, token, rol, usuario: u.usuario });
+      // Construir nombre completo
+      const nombre_completo = [u.nombres, u.primer_apellido, u.segundo_apellido]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || u.usuario;
+
+      res.json({ 
+        success: true, 
+        token, 
+        rol, 
+        usuario: u.usuario,
+        nombre: nombre_completo
+      });
     });
   }
 );
@@ -901,38 +933,83 @@ app.get('/eolicos', requireAuth, requireRole('administrador'), (req, res) => {
 });
 
 // Crear (acepta tarifa mensual y costos)
+// =========================================================
+// Crear un nuevo eólico (ADMIN) - Código generado automáticamente
+// =========================================================
+
+// Función helper para generar código único
+async function generarCodigoUnico() {
+  return new Promise((resolve, reject) => {
+    // Obtener el último código numérico usado
+    db.query(
+      `SELECT codigo FROM eolicos WHERE codigo REGEXP '^[0-9]{4}$' ORDER BY codigo DESC LIMIT 1`,
+      (err, rows) => {
+        if (err) return reject(err);
+        
+        let nuevoNumero = 1;
+        if (rows && rows.length > 0) {
+          const ultimoCodigo = rows[0].codigo;
+          nuevoNumero = parseInt(ultimoCodigo, 10) + 1;
+        }
+        
+        // Formatear con padding de ceros (ej: 0001, 0002, 0003...)
+        const codigoGenerado = String(nuevoNumero).padStart(4, '0');
+        
+        // Verificar que no exista (por si acaso)
+        db.query('SELECT id_eolico FROM eolicos WHERE codigo=?', [codigoGenerado], (err2, rows2) => {
+          if (err2) return reject(err2);
+          if (rows2 && rows2.length > 0) {
+            // Si existe, intentar con el siguiente
+            const siguienteNumero = nuevoNumero + 1;
+            const siguienteCodigo = String(siguienteNumero).padStart(4, '0');
+            resolve(siguienteCodigo);
+          } else {
+            resolve(codigoGenerado);
+          }
+        });
+      }
+    );
+  });
+}
+
 app.post(
   '/eolicos',
   requireAuth,
   requireRole('administrador'),
   [
-    body('codigo').isString().trim().isLength({ min: 3, max: 20 }),
     body('tarifa_mes').optional().isFloat({ min: 0 }),
     body('costo_instalacion').optional().isFloat({ min: 0 }),
     body('deposito').optional().isFloat({ min: 0 }),
     body('costo_operativo_dia').optional().isFloat({ min: 0 }),
   ],
-  (req, res) => {
+  async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errores: errors.array() });
 
-    const codigo = String(req.body.codigo).trim().toUpperCase();
-    const tarifa_mes = Number(req.body.tarifa_mes ?? 0);
-    const costo_instalacion = Number(req.body.costo_instalacion ?? 0);
-    const deposito = Number(req.body.deposito ?? 0);
-    const costo_operativo_dia = Number(req.body.costo_operativo_dia ?? 0);
+    try {
+      // Generar código único automáticamente
+      const codigo = await generarCodigoUnico();
+      
+      const tarifa_mes = Number(req.body.tarifa_mes ?? 0);
+      const costo_instalacion = Number(req.body.costo_instalacion ?? 0);
+      const deposito = Number(req.body.deposito ?? 0);
+      const costo_operativo_dia = Number(req.body.costo_operativo_dia ?? 0);
 
-    const sql = `
-      INSERT INTO eolicos (codigo, tarifa_mes, costo_instalacion, deposito, costo_operativo_dia)
-      VALUES (?, ?, ?, ?, ?)
-    `;
-    db.query(sql, [codigo, tarifa_mes, costo_instalacion, deposito, costo_operativo_dia], (err, r) => {
-      if (err) {
-        if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ mensaje: 'Ese código ya existe.' });
-        return res.status(500).json({ mensaje: 'Error al crear eólico' });
-      }
-      res.status(201).json({ id_eolico: r.insertId, mensaje: 'Eólico creado' });
-    });
+      const sql = `
+        INSERT INTO eolicos (codigo, tarifa_mes, costo_instalacion, deposito, costo_operativo_dia)
+        VALUES (?, ?, ?, ?, ?)
+      `;
+      db.query(sql, [codigo, tarifa_mes, costo_instalacion, deposito, costo_operativo_dia], (err, r) => {
+        if (err) {
+          if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ mensaje: 'Error de duplicado. Intente nuevamente.' });
+          return res.status(500).json({ mensaje: 'Error al crear eólico' });
+        }
+        res.status(201).json({ id_eolico: r.insertId, codigo: codigo, mensaje: 'Eólico creado exitosamente' });
+      });
+    } catch (error) {
+      console.error('Error generando código:', error);
+      res.status(500).json({ mensaje: 'Error al generar código único' });
+    }
   }
 );
 
@@ -1943,14 +2020,17 @@ app.get('/health', (_req, res) => {
 
 // --- START SERVER (debe existir solo una vez y al final) ---
 const http = require('http');
+const { showConnectionInfo } = require('./qr-helper');
 const HOST = process.env.HOST || '0.0.0.0';
 
 const server = http.createServer(app);
 
 server.listen(PORT, HOST, () => {
-  console.log(`[backend] listening on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
+  // Mostrar información con código QR
+  showConnectionInfo(PORT, 'Backend API');
 });
 
 server.on('error', (err) => {
-  console.error('Server listen error:', err.code || err.message, err);
+  console.error('❌ Server listen error:', err.code || err.message, err);
 });
+

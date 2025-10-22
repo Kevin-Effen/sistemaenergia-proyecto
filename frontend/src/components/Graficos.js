@@ -15,6 +15,7 @@ import {
 } from "chart.js";
 import api from "../api/axios";
 import { generarPDF } from "../components/ReportePDF";
+import { useDevice } from "../context/DeviceContext";
 import "animate.css";
 
 ChartJS.register(
@@ -67,6 +68,9 @@ function Graficos() {
   const lineRef = useRef(null);
   const barRef = useRef(null);
   const pieRef = useRef(null);
+
+  // ---- Context global de dispositivos ----
+  const { dispositivoSeleccionado } = useDevice();
 
   const [datos, setDatos] = useState([]);
   const [error, setError] = useState("");
@@ -131,6 +135,24 @@ function Graficos() {
       setCargando(true);
       setError("");
 
+      // Si hay dispositivo seleccionado, usar endpoint específico
+      if (dispositivoSeleccionado) {
+        const res = await api.get(`/cliente/lecturas?codigo=${encodeURIComponent(dispositivoSeleccionado)}&limit=100`);
+        const arr = Array.isArray(res.data) ? res.data : [];
+        setDatos(
+          arr.map((d, i) => ({
+            fecha_lectura:
+              d.fecha_lectura || new Date(Date.now() - (arr.length - i) * 3600e3).toISOString(),
+            voltaje: Number(d.voltaje) || 0,
+            bateria: Number(d.bateria) || 0,
+            consumo: Number(d.consumo) || 0,
+            codigo: d.codigo,
+          }))
+        );
+        setCargando(false);
+        return;
+      }
+
       // si soy admin y hay un usuario seleccionado, pedir sus datos
       const userId = soyAdmin && seleccionado?.id_usuario ? seleccionado.id_usuario : undefined;
       const url = userId ? `/resumen?userId=${encodeURIComponent(userId)}` : "/resumen";
@@ -151,7 +173,7 @@ function Graficos() {
     } finally {
       setCargando(false);
     }
-  }, [soyAdmin, seleccionado]);
+  }, [soyAdmin, seleccionado, dispositivoSeleccionado]);
 
   useEffect(() => {
     cargar();
@@ -280,17 +302,26 @@ function Graficos() {
     });
   };
 
-  // Texto “Mostrando…”
+  // Texto "Mostrando…"
   const tituloContexto = useMemo(() => {
+    let texto = "";
     if (soyAdmin && seleccionado) {
       const nom =
         [seleccionado.nombres, seleccionado.primer_apellido, seleccionado.segundo_apellido]
           .filter(Boolean)
           .join(" ") || seleccionado.usuario;
-      return `Mostrando: ${nom} (ID ${seleccionado.id_usuario})`;
+      texto = `Mostrando: ${nom} (ID ${seleccionado.id_usuario})`;
+    } else {
+      texto = me?.usuario ? `Mostrando: ${me.usuario}` : "Mostrando: usuario actual";
     }
-    return me?.usuario ? `Mostrando: ${me.usuario}` : "Mostrando: usuario actual";
-  }, [soyAdmin, seleccionado, me]);
+    
+    // Agregar dispositivo si está seleccionado
+    if (dispositivoSeleccionado) {
+      texto += ` | Dispositivo: ${dispositivoSeleccionado}`;
+    }
+    
+    return texto;
+  }, [soyAdmin, seleccionado, me, dispositivoSeleccionado]);
 
   return (
     <div className="container my-5 animate__animated animate__fadeIn">

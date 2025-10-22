@@ -21,6 +21,8 @@ import Layout from "./components/Layout";
 import Footer from "./components/Footer";
 import MisDispositivos from "./pages/MisDispositivos";
 import DispositivoDetalle from "./pages/DispositivoDetalle";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { DeviceProvider } from "./context/DeviceContext";
 
 // ===== Helpers de sesión/rol
 function getToken() {
@@ -53,25 +55,30 @@ function AdminOnly() {
 function DashboardWrapper() {
   const rol = getRol();
   if (rol === "administrador") return <DashboardAdmin />;
-  if (rol === "usuario") return <DashboardUsuario />;
+  if (rol === "usuario") return (
+    <ErrorBoundary>
+      <DashboardUsuario />
+    </ErrorBoundary>
+  );
   // si por alguna razón no hay rol, forzamos login
   return <Navigate to="/" replace />;
 }
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-        <div style={{ flex: 1 }}>
-          <Routes>
-            {/* Públicas */}
-            <Route path="/" element={<Login />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password/:token" element={<ResetPassword />} />
+    <DeviceProvider>
+      <BrowserRouter>
+        <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+          <div style={{ flex: 1 }}>
+            <Routes>
+              {/* Públicas */}
+              <Route path="/" element={<Login />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-            {/* Protegidas */}
-            <Route element={<PrivateRoute />}>
-              <Route element={<Layout />}>
+              {/* Protegidas */}
+              <Route element={<PrivateRoute />}>
+                <Route element={<Layout />}>
                 {/* Dashboard según rol */}
                 <Route path="/dashboard" element={<DashboardWrapper />} />
 
@@ -80,8 +87,8 @@ export default function App() {
                   <Route path="/usuarios" element={<Usuarios />} />
                   <Route path="/usuarios/:id" element={<UsuarioDetalle />} />
                   {/* Alquiler/Asignación */}
-                  <Route path="/alquiler" element={<Eolicos />} />
-                  <Route path="/eolicos" element={<Eolicos />} />
+                  <Route path="/alquiler" element={<ErrorBoundary><Eolicos /></ErrorBoundary>} />
+                  <Route path="/eolicos" element={<ErrorBoundary><Eolicos /></ErrorBoundary>} />
                   {/* Herramientas admin extra */}
                   <Route path="/admin/monitoreo" element={<MonitoreoAdmin />} />
                 </Route>
@@ -106,6 +113,7 @@ export default function App() {
         </div>
         <Footer />
       </div>
-    </BrowserRouter>
+      </BrowserRouter>
+    </DeviceProvider>
   );
 }
