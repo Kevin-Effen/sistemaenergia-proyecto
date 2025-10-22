@@ -405,7 +405,16 @@ app.get('/usuarios', requireAuth, requireRole('administrador'), (req, res) => {
 
   let sql = `
     SELECT 
-      u.*,
+      u.id_usuario,
+      u.cuenta_id,
+      u.rol_id,
+      u.nombres,
+      u.primer_apellido,
+      u.segundo_apellido,
+      u.ci,
+      u.telefono,
+      u.direccion,
+      u.fecha_nacimiento,
       c.usuario,
       r.nombre_rol,
       e.id_eolico      AS eolico_id,
@@ -436,7 +445,7 @@ app.get('/usuarios', requireAuth, requireRole('administrador'), (req, res) => {
     params.push(like, like, like, like, like, like, like, like, like);
   }
 
-  sql += ' ORDER BY u.id_usuario ASC';
+  sql += ' GROUP BY u.id_usuario ORDER BY u.id_usuario ASC';
 
   db.query(sql, params, (err, result) => {
     if (err) return res.status(500).send(err);

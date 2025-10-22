@@ -1,5 +1,6 @@
 // src/pages/Usuarios.jsx
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useTransition } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import Navbar from "../components/Navbar";
@@ -29,12 +30,14 @@ const normLoc = (s) =>
 
 function Usuarios() {
   const navigate = useNavigate();
+  const [isPending, startTransition] = useTransition();
 
   // Lista
   const [usuarios, setUsuarios] = useState([]);
   const [cargandoLista, setCargandoLista] = useState(false);
 
-  // 🔎 Buscador
+  // 🔎 Buscador con debounce
+  const [busquedaInput, setBusquedaInput] = useState("");
   const [busqueda, setBusqueda] = useState("");
 
   // Formulario (crear / editar)
@@ -70,17 +73,41 @@ function Usuarios() {
   // Asignar por código (cuando estoy editando)
   const [eolicoCodigoInput, setEolicoCodigoInput] = useState("");
 
+  // Debounce para búsqueda con flushSync para evitar problemas de reconciliación
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // Usar flushSync para forzar actualización síncrona completa
+      flushSync(() => {
+        setBusqueda(busquedaInput);
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [busquedaInput]);
+
   useEffect(() => {
     cargarUsuarios();
   }, []);
 
-  const cargarUsuarios = async () => {
+  const cargarUsuarios = useCallback(async () => {
     try {
       setCargandoLista(true);
       setErrorGlobal("");
       // Backend debe devolver eolico_id, eolico_codigo, eolico_habilitado
       const res = await api.get("/usuarios");
-      setUsuarios(Array.isArray(res.data) ? res.data : []);
+      const data = Array.isArray(res.data) ? res.data : [];
+      
+      // Eliminar duplicados por id_usuario (por si acaso)
+      const usuariosUnicos = [];
+      const idsVistos = new Set();
+      
+      for (const u of data) {
+        if (!idsVistos.has(u.id_usuario)) {
+          idsVistos.add(u.id_usuario);
+          usuariosUnicos.push(u);
+        }
+      }
+      
+      setUsuarios(usuariosUnicos);
     } catch (err) {
       console.error("Error al cargar usuarios:", err);
       setErrorGlobal("No se pudo cargar la lista de usuarios.");
@@ -88,7 +115,7 @@ function Usuarios() {
     } finally {
       setCargandoLista(false);
     }
-  };
+  }, []);
 
   const resetForm = () => {
     setUsuario("");
@@ -189,7 +216,7 @@ function Usuarios() {
     }
   };
 
-  const handleEditar = (u) => {
+  const handleEditar = useCallback((u) => {
     setNombre(u.nombres || "");
     setPrimerApellido(u.primer_apellido || "");
     setSegundoApellido(u.segundo_apellido || "");
@@ -205,7 +232,7 @@ function Usuarios() {
     setModalErrors([]);
     setShowErrModal(false);
     setEolicoCodigoInput("");
-  };
+  }, []);
 
   const handleActualizar = async () => {
     setTouched({
@@ -247,7 +274,7 @@ function Usuarios() {
     }
   };
 
-  const handleEliminar = async (id_usuario) => {
+  const handleEliminar = useCallback(async (id_usuario) => {
     if (!window.confirm("¿Está seguro de eliminar este usuario?")) return;
     try {
       setBorrandoId(id_usuario);
@@ -261,10 +288,10 @@ function Usuarios() {
     } finally {
       setBorrandoId(null);
     }
-  };
+  }, [cargarUsuarios]);
 
   // 🟢 Toggle eólico: /eolicos/:id/toggle usando eolico_id
-  const handleToggleEolico = async (u) => {
+  const handleToggleEolico = useCallback(async (u) => {
     if (!u?.eolico_id) return;
     const next = u.eolico_habilitado ? 0 : 1;
     try {
@@ -281,10 +308,10 @@ function Usuarios() {
     } finally {
       setToggleId(null);
     }
-  };
+  }, []);
 
   // 🟢 Asignar eólico por código (cuando estoy en edición)
-  const asignarEolicoPorCodigo = async () => {
+  const asignarEolicoPorCodigo = useCallback(async () => {
     const codigo = (eolicoCodigoInput || "").trim().toUpperCase();
     if (!editingId) {
       alert("Primero selecciona un usuario para editar.");
@@ -304,7 +331,7 @@ function Usuarios() {
     } catch (e) {
       alert(e?.response?.data?.mensaje || "No se pudo asignar el eólico.");
     }
-  };
+  }, [eolicoCodigoInput, editingId, cargarUsuarios]);
 
   // Reporte CSV
   const handleReporte = async () => {
@@ -419,22 +446,34 @@ function Usuarios() {
     }
   };
 
-  // Filtro local
+  // Filtro local - Memoizado con estabilidad adicional
   const usuariosFiltrados = useMemo(() => {
     const q = normLoc(busqueda);
-    if (!q) return usuarios;
-    return usuarios.filter((u) => {
+    
+    // SIEMPRE validar que cada usuario tenga id_usuario válido
+    const usuariosValidos = usuarios.filter(u => u && u.id_usuario);
+    
+    if (!q) return usuariosValidos;
+    
+    // Crear copia profunda para evitar problemas de referencia
+    const usuariosEstables = usuariosValidos.map(u => {
+      const copia = { ...u };
+      // Congelar propiedades críticas para evitar mutaciones
+      Object.defineProperty(copia, 'id_usuario', { 
+        value: u.id_usuario, 
+        writable: false 
+      });
+      return copia;
+    });
+    
+    return usuariosEstables.filter((u) => {
+      // Solo buscar por: nombre, apellidos, CI y correo (usuario)
       const campos = [
-        u.id_usuario,
-        u.usuario,
-        u.nombre_rol,
-        u.nombres,
-        u.primer_apellido,
-        u.segundo_apellido,
-        u.ci,
-        u.telefono,
-        u.direccion,
-        u.eolico_codigo,
+        u.usuario,        // Correo electrónico
+        u.nombres,        // Nombres
+        u.primer_apellido, // Primer apellido
+        u.segundo_apellido, // Segundo apellido
+        u.ci,             // Cédula de Identidad
       ].map((x) => normLoc(x));
       return campos.some((c) => c.includes(q));
     });
@@ -759,14 +798,14 @@ function Usuarios() {
                   <input
                     type="search"
                     className="form-control"
-                    placeholder="Buscar por correo, nombre, CI, teléfono, dirección o código eólico..."
-                    value={busqueda}
-                    onChange={(e) => setBusqueda(e.target.value)}
+                    placeholder="Buscar por correo, nombre, apellido o CI..."
+                    value={busquedaInput}
+                    onChange={(e) => setBusquedaInput(e.target.value)}
                   />
-                  {busqueda && (
+                  {busquedaInput && (
                     <button 
                       className="btn btn-outline-secondary" 
-                      onClick={() => setBusqueda("")}
+                      onClick={() => setBusquedaInput("")}
                       title="Limpiar búsqueda"
                     >
                       <i className="bi bi-x-circle me-1"></i>
@@ -776,10 +815,10 @@ function Usuarios() {
                 </div>
               </div>
               <div className="col-auto">
-                <div className="badge bg-info text-white">
+                <span className="badge bg-info text-white" key="contador-badge">
                   <i className="bi bi-list-ul me-1"></i>
-                  {usuariosFiltrados.length} resultado{usuariosFiltrados.length !== 1 ? 's' : ''}
-                </div>
+                  <span>{usuariosFiltrados.length}</span>
+                </span>
               </div>
             </div>
           </div>
@@ -813,20 +852,51 @@ function Usuarios() {
                     <th style={{ minWidth: 180, width: '18%' }}>Acciones</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody key={`tbody-${usuariosFiltrados.length}`}>
                   {usuariosFiltrados.map((u, idx) => {
-                    const nro = idx + 1;
-                    const tieneEolico = !!u.eolico_codigo;
-                    const habil = !!u.eolico_habilitado;
-                    const nombreCompleto = [u.nombres, u.primer_apellido, u.segundo_apellido]
-                      .filter(Boolean)
-                      .join(" ") || "Sin nombre";
+                    // Sanitizar TODOS los datos del usuario
+                    const usuarioSeguro = {
+                      id_usuario: u.id_usuario || idx,
+                      usuario: String(u.usuario || '').trim() || 'Sin correo',
+                      nombres: String(u.nombres || '').trim(),
+                      primer_apellido: String(u.primer_apellido || '').trim(),
+                      segundo_apellido: String(u.segundo_apellido || '').trim(),
+                      ci: String(u.ci || '').trim(),
+                      telefono: String(u.telefono || '').trim(),
+                      direccion: String(u.direccion || '').trim(),
+                      fecha_nacimiento: u.fecha_nacimiento,
+                      nombre_rol: String(u.nombre_rol || 'usuario').trim(),
+                      eolico_codigo: String(u.eolico_codigo || '').trim(),
+                      eolico_habilitado: !!u.eolico_habilitado,
+                      eolico_id: u.eolico_id
+                    };
+                    
+                    const tieneEolico = usuarioSeguro.eolico_codigo.length > 0;
+                    const habil = usuarioSeguro.eolico_habilitado;
+                    
+                    // Asegurar que nombreCompleto sea un string estable
+                    const nombreParts = [
+                      usuarioSeguro.nombres,
+                      usuarioSeguro.primer_apellido,
+                      usuarioSeguro.segundo_apellido
+                    ].filter(p => p.length > 0);
+                    
+                    const nombreCompleto = nombreParts.length > 0 
+                      ? nombreParts.join(" ") 
+                      : "Sin nombre";
 
-                    return (
-                      <tr key={`user-${u.id_usuario}-${u.usuario}`}>
+                    // Key ESTABLE - Si hay solo 1 resultado, agregar sufijo especial
+                    const esSoloUno = usuariosFiltrados.length === 1;
+                    const keyEstable = esSoloUno 
+                      ? `single-${usuarioSeguro.id_usuario}-${usuarioSeguro.ci || 'sin-ci'}`
+                      : `usr-${usuarioSeguro.id_usuario}-${usuarioSeguro.ci || idx}`;
+
+                    // Para 1 solo resultado, envolver en Fragment para forzar reconciliación limpia
+                    const filaContenido = (
+                      <tr key={keyEstable}>
                         {/* Número */}
                         <td className="text-center">
-                          <div className="badge bg-light text-dark border fw-semibold">{nro}</div>
+                          <span className="badge bg-light text-dark border fw-semibold">{idx + 1}</span>
                         </td>
 
                         {/* Información Personal */}
@@ -838,12 +908,12 @@ function Usuarios() {
                             </div>
                             <small className="text-muted">
                               <i className="bi bi-envelope me-1"></i>
-                              {u.usuario || "Sin correo"}
+                              {usuarioSeguro.usuario}
                             </small>
-                            {u.ci && (
+                            {usuarioSeguro.ci && (
                               <small className="text-muted">
                                 <i className="bi bi-card-text me-1"></i>
-                                CI: {u.ci}
+                                CI: {usuarioSeguro.ci}
                               </small>
                             )}
                           </div>
@@ -852,22 +922,22 @@ function Usuarios() {
                         {/* Contacto */}
                         <td>
                           <div className="d-flex flex-column gap-1">
-                            {u.telefono && (
+                            {usuarioSeguro.telefono && (
                               <div className="text-muted">
                                 <i className="bi bi-telephone-fill me-1 text-success"></i>
-                                {u.telefono}
+                                {usuarioSeguro.telefono}
                               </div>
                             )}
-                            {u.direccion && (
+                            {usuarioSeguro.direccion && (
                               <small className="text-muted text-break">
                                 <i className="bi bi-geo-alt-fill me-1"></i>
-                                {u.direccion}
+                                {usuarioSeguro.direccion}
                               </small>
                             )}
-                            {u.fecha_nacimiento && (
+                            {usuarioSeguro.fecha_nacimiento && (
                               <small className="text-muted">
                                 <i className="bi bi-calendar-event me-1"></i>
-                                {fmtFecha(u.fecha_nacimiento)}
+                                {fmtFecha(usuarioSeguro.fecha_nacimiento)}
                               </small>
                             )}
                           </div>
@@ -875,24 +945,24 @@ function Usuarios() {
 
                         {/* Rol */}
                         <td className="text-center">
-                          <div className={`badge ${u.nombre_rol === 'administrador' ? 'bg-danger' : 'bg-info'} text-white`}>
-                            <i className={`bi ${u.nombre_rol === 'administrador' ? 'bi-shield-fill-check' : 'bi-person-badge'} me-1`}></i>
-                            {u.nombre_rol || "usuario"}
-                          </div>
+                          <span className={`badge ${usuarioSeguro.nombre_rol === 'administrador' ? 'bg-danger' : 'bg-info'} text-white`}>
+                            <i className={`bi ${usuarioSeguro.nombre_rol === 'administrador' ? 'bi-shield-fill-check' : 'bi-person-badge'} me-1`}></i>
+                            {usuarioSeguro.nombre_rol}
+                          </span>
                         </td>
 
-                        {/* Equipo y Estado (FUSIONADOS) */}
+                        {/* Equipo y Estado */}
                         <td>
                           {tieneEolico ? (
                             <div className="d-flex flex-column gap-2">
                               <div className="d-flex align-items-center gap-2">
                                 <i className="bi bi-wind text-primary fs-5"></i>
-                                <strong className="text-dark">{u.eolico_codigo}</strong>
+                                <strong className="text-dark">{usuarioSeguro.eolico_codigo}</strong>
                               </div>
-                              <div className={`badge ${habil ? "bg-success" : "bg-danger"} w-100`}>
+                              <span className={`badge ${habil ? "bg-success" : "bg-danger"} w-100`}>
                                 <i className={`bi ${habil ? "bi-check-circle-fill" : "bi-x-circle-fill"} me-1`}></i>
                                 {habil ? "✓ Activo" : "✗ Inactivo"}
-                              </div>
+                              </span>
                             </div>
                           ) : (
                             <div className="text-center">
@@ -900,7 +970,7 @@ function Usuarios() {
                                 <i className="bi bi-dash-circle"></i>
                                 <div>Sin equipo</div>
                               </div>
-                              <div className="badge bg-secondary w-100">N/A</div>
+                              <span className="badge bg-secondary w-100">N/A</span>
                             </div>
                           )}
                         </td>
@@ -908,17 +978,15 @@ function Usuarios() {
                         {/* Acciones */}
                         <td>
                           <div className="d-flex flex-column gap-2" style={{ minWidth: '160px' }}>
-                            {/* Botón directo: Asignar/Ver Equipo */}
                             <button
                               className="btn btn-sm btn-primary w-100"
-                              onClick={() => navigate(`/eolicos?userId=${u.id_usuario}`)}
+                              onClick={() => navigate(`/eolicos?userId=${usuarioSeguro.id_usuario}`)}
                               title={tieneEolico ? "Ver equipo asignado" : "Asignar equipo eólico"}
                             >
                               <i className="bi bi-wind me-1"></i>
                               {tieneEolico ? "Ver Equipo" : "Asignar"}
                             </button>
 
-                            {/* Dropdown de Acciones */}
                             <div className="dropdown">
                               <button
                                 className="btn btn-sm btn-outline-secondary dropdown-toggle w-100"
@@ -926,35 +994,28 @@ function Usuarios() {
                                 id={`dropdownAcciones-${u.id_usuario}`}
                                 data-bs-toggle="dropdown"
                                 aria-expanded="false"
-                                title="Ver acciones disponibles"
                               >
                                 <i className="bi bi-gear-fill me-1"></i>
                                 Acciones
                               </button>
-                              <ul className="dropdown-menu dropdown-menu-end" aria-labelledby={`dropdownAcciones-${u.id_usuario}`}>
-                                {/* Editar */}
+                              <ul className="dropdown-menu dropdown-menu-end">
                                 <li>
-                                  <button
-                                    className="dropdown-item"
-                                    onClick={() => handleEditar(u)}
-                                  >
+                                  <button className="dropdown-item" onClick={() => handleEditar(u)}>
                                     <i className="bi bi-pencil-square text-warning me-2"></i>
                                     Editar Usuario
                                   </button>
                                 </li>
-
-                                {/* Separador si tiene equipo */}
+                                
                                 {tieneEolico && <li><hr className="dropdown-divider" /></li>}
-
-                                {/* Toggle Estado (si tiene equipo) */}
+                                
                                 {tieneEolico && (
                                   <li>
                                     <button
                                       className="dropdown-item"
                                       onClick={() => handleToggleEolico(u)}
-                                      disabled={toggleId === u.id_usuario}
+                                      disabled={toggleId === usuarioSeguro.id_usuario}
                                     >
-                                      {toggleId === u.id_usuario ? (
+                                      {toggleId === usuarioSeguro.id_usuario ? (
                                         <>
                                           <i className="spinner-border spinner-border-sm me-2"></i>
                                           Procesando...
@@ -968,18 +1029,16 @@ function Usuarios() {
                                     </button>
                                   </li>
                                 )}
-
-                                {/* Separador */}
+                                
                                 <li><hr className="dropdown-divider" /></li>
-
-                                {/* Eliminar */}
+                                
                                 <li>
                                   <button
                                     className="dropdown-item text-danger"
-                                    onClick={() => handleEliminar(u.id_usuario)}
-                                    disabled={borrandoId === u.id_usuario}
+                                    onClick={() => handleEliminar(usuarioSeguro.id_usuario)}
+                                    disabled={borrandoId === usuarioSeguro.id_usuario}
                                   >
-                                    {borrandoId === u.id_usuario ? (
+                                    {borrandoId === usuarioSeguro.id_usuario ? (
                                       <>
                                         <i className="spinner-border spinner-border-sm me-2"></i>
                                         Eliminando...
@@ -998,6 +1057,13 @@ function Usuarios() {
                         </td>
                       </tr>
                     );
+
+                    // Si es solo 1 resultado, envolver en Fragment para mejor reconciliación
+                    return esSoloUno ? (
+                      <React.Fragment key={`fragment-${keyEstable}`}>
+                        {filaContenido}
+                      </React.Fragment>
+                    ) : filaContenido;
                   })}
                   {usuariosFiltrados.length === 0 && !cargandoLista && (
                     <tr>
