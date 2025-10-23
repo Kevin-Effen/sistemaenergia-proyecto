@@ -17,6 +17,7 @@ import api from "../api/axios";
 import { generarPDF } from "../components/ReportePDF";
 import { useDevice } from "../context/DeviceContext";
 import "animate.css";
+import "../styles/graficos-profesional.css";
 
 ChartJS.register(
   LineElement,
@@ -324,30 +325,24 @@ function Graficos() {
   }, [soyAdmin, seleccionado, me, dispositivoSeleccionado]);
 
   return (
-    <div className="container my-5 animate__animated animate__fadeIn">
-      {/* Header & switches */}
-      <div className="card shadow-sm mb-4" style={{ borderRadius: 16 }}>
-        <div className="card-body d-flex flex-wrap align-items-center justify-content-between">
-          <div className="d-flex flex-column">
-            <h3 className="m-0">📊 Monitoreo del Sistema Eólico</h3>
-            <small className="text-muted">{tituloContexto}</small>
+    <div className="graficos-container-modern">
+      {/* Header Premium */}
+      <div className="graficos-header-premium animate__animated animate__fadeInDown">
+        <div className="header-content-wrapper">
+          <div className="header-left">
+            <div className="icon-wrapper">
+              <i className="fas fa-chart-line"></i>
+            </div>
+            <div className="title-section">
+              <h2 className="main-title">Monitoreo del Sistema Eólico</h2>
+              <p className="subtitle-info">{tituloContexto}</p>
+            </div>
           </div>
 
-          <div className="d-flex align-items-center gap-3">
-            <div className="form-check form-switch m-0">
-              <input
-                className="form-check-input"
-                type="checkbox"
-                id="switchRT"
-                checked={tiempoReal}
-                onChange={() => setTiempoReal((prev) => !prev)}
-              />
-              <label className="form-check-label" htmlFor="switchRT">
-                Tiempo real (simulado)
-              </label>
-            </div>
-            <button className="btn btn-outline-secondary" onClick={cargar}>
-              Recargar
+          <div className="header-actions">
+            <button className="btn-reload" onClick={cargar} title="Recargar datos">
+              <i className="fas fa-sync-alt"></i>
+              <span className="btn-text">Recargar</span>
             </button>
           </div>
         </div>
@@ -355,188 +350,255 @@ function Graficos() {
 
       {/* Buscador de usuarios (solo admin) */}
       {soyAdmin && (
-        <div className="card shadow-sm mb-3">
-          <div className="card-body">
-            <div className="d-flex align-items-center gap-2 flex-wrap">
-              <div className="badge bg-dark-subtle text-dark me-2">Modo administrador</div>
-              <div className="flex-grow-1" style={{ minWidth: 280 }}>
-                <input
-                  type="search"
-                  className="form-control"
-                  placeholder="Buscar usuario por nombre, correo, CI…"
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                />
-              </div>
+        <div className="admin-search-card animate__animated animate__fadeIn">
+          <div className="admin-badge-header">
+            <span className="admin-badge">
+              <i className="fas fa-user-shield"></i> Modo Administrador
+            </span>
+            {cargandoUsuarios && (
+              <span className="loading-indicator">
+                <i className="fas fa-spinner fa-spin"></i> Cargando usuarios...
+              </span>
+            )}
+          </div>
+
+          <div className="search-bar-container">
+            <div className="search-input-wrapper">
+              <i className="fas fa-search search-icon"></i>
+              <input
+                type="search"
+                className="search-input-modern"
+                placeholder="Buscar por nombre, correo, CI o usuario..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+              />
+              {busqueda && (
+                <button 
+                  className="clear-search-btn"
+                  onClick={() => setBusqueda("")}
+                  title="Limpiar búsqueda"
+                >
+                  <i className="fas fa-times"></i>
+                </button>
+              )}
+            </div>
+            
+            {seleccionado && (
               <button
-                className="btn btn-outline-secondary"
+                className="btn-clear-selection"
                 onClick={() => {
                   setBusqueda("");
                   setSeleccionado(null);
-                  cargar(); // recargar al usuario actual (o sin userId)
+                  cargar();
                 }}
-                disabled={!seleccionado}
               >
-                Limpiar selección
+                <i className="fas fa-user-times"></i>
+                <span>Limpiar selección</span>
               </button>
-              {cargandoUsuarios && <span className="text-muted small ms-2">Cargando usuarios…</span>}
-            </div>
-
-            {/* dropdown simple con resultados */}
-            {busqueda && usuariosFiltrados.length > 0 && (
-              <div className="list-group mt-2" style={{ maxHeight: 280, overflowY: "auto" }}>
-                {usuariosFiltrados.map((u) => {
-                  const nombreCompleto = [u.nombres, u.primer_apellido, u.segundo_apellido]
-                    .filter(Boolean)
-                    .join(" ");
-                  return (
-                    <button
-                      key={u.id_usuario}
-                      type="button"
-                      className="list-group-item list-group-item-action"
-                      onClick={() => {
-                        setSeleccionado(u);
-                        setBusqueda(`${nombreCompleto || u.usuario} (${u.usuario || "sin correo"})`);
-                        setTimeout(() => cargar(), 0);
-                      }}
-                    >
-                      <div className="d-flex justify-content-between">
-                        <strong>{nombreCompleto || "—"}</strong>
-                        <span className="badge bg-secondary">{u.nombre_rol || "—"}</span>
-                      </div>
-                      <div className="small text-muted">
-                        {u.usuario || "—"} · ID: {u.id_usuario} · CI: {u.ci || "—"}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {soyAdmin && seleccionado && (
-              <div className="mt-2">
-                <span className="badge bg-info text-dark">
-                  Seleccionado: ID {seleccionado.id_usuario}
-                </span>
-              </div>
             )}
           </div>
+
+          {/* Dropdown de resultados */}
+          {busqueda && usuariosFiltrados.length > 0 && (
+            <div className="search-results-dropdown animate__animated animate__fadeInDown animate__faster">
+              {usuariosFiltrados.map((u) => {
+                const nombreCompleto = [u.nombres, u.primer_apellido, u.segundo_apellido]
+                  .filter(Boolean)
+                  .join(" ");
+                return (
+                  <div
+                    key={u.id_usuario}
+                    className="result-item"
+                    onClick={() => {
+                      setSeleccionado(u);
+                      setBusqueda(`${nombreCompleto || u.usuario} (${u.usuario || "sin correo"})`);
+                      setTimeout(() => cargar(), 0);
+                    }}
+                  >
+                    <div className="result-main">
+                      <div className="result-name">
+                        <i className="fas fa-user-circle"></i>
+                        {nombreCompleto || "Sin nombre"}
+                      </div>
+                      <span className={`role-badge role-${(u.nombre_rol || '').toLowerCase()}`}>
+                        {u.nombre_rol || "—"}
+                      </span>
+                    </div>
+                    <div className="result-details">
+                      <span><i className="fas fa-envelope"></i> {u.usuario || "—"}</span>
+                      <span><i className="fas fa-id-card"></i> CI: {u.ci || "—"}</span>
+                      <span><i className="fas fa-hashtag"></i> ID: {u.id_usuario}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {seleccionado && (
+            <div className="selected-user-badge animate__animated animate__bounceIn">
+              <i className="fas fa-check-circle"></i>
+              <span>Viendo datos de: <strong>{seleccionado.nombres || seleccionado.usuario}</strong> (ID: {seleccionado.id_usuario})</span>
+            </div>
+          )}
         </div>
       )}
 
-      {error && <div className="alert alert-danger text-center mb-4">{error}</div>}
-      {cargando && <p className="text-center my-4">Cargando datos...</p>}
+      {error && (
+        <div className="alert-error-modern animate__animated animate__shake">
+          <i className="fas fa-exclamation-triangle"></i>
+          <span>{error}</span>
+        </div>
+      )}
+      
+      {cargando && (
+        <div className="loading-state">
+          <div className="spinner-modern"></div>
+          <p>Cargando datos del sistema...</p>
+        </div>
+      )}
+      
       {!cargando && datos.length === 0 && !error && (
-        <p className="text-center text-muted">No hay datos para mostrar.</p>
+        <div className="empty-state">
+          <i className="fas fa-chart-bar"></i>
+          <h3>No hay datos disponibles</h3>
+          <p>Comienza a monitorear tu sistema para ver las gráficas aquí</p>
+        </div>
       )}
 
       {datos.length > 0 && (
-        <>
-          {/* Línea */}
-          <section className="mb-5">
-            <div className="card shadow" style={{ borderRadius: 16 }}>
-              <div
-                className="card-header bg-success text-white"
-                style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16 }}
+        <div className="charts-grid animate__animated animate__fadeIn">
+          {/* Gráfico Principal - Tendencias */}
+          <div className="chart-card chart-card-full animate__animated animate__fadeInUp">
+            <div className="chart-header chart-header-success">
+              <div className="chart-title-section">
+                <i className="fas fa-chart-line"></i>
+                <h3>Tendencias de Voltaje, Batería y Consumo</h3>
+              </div>
+              <div className="chart-stats">
+                <div className="stat-item">
+                  <span className="stat-label">Voltaje</span>
+                  <span className="stat-value" style={{color: '#28a745'}}>
+                    {voltajes[voltajes.length - 1]?.toFixed(2) || 0}V
+                  </span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Batería</span>
+                  <span className="stat-value" style={{color: '#007bff'}}>
+                    {baterias[baterias.length - 1] || 0}%
+                  </span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">Consumo</span>
+                  <span className="stat-value" style={{color: '#fd7e14'}}>
+                    {consumos[consumos.length - 1] || 0}W
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="chart-body">
+              <Line ref={lineRef} data={lineData} options={options} />
+            </div>
+            <div className="chart-footer">
+              <button
+                className="btn-export btn-export-success"
+                onClick={() =>
+                  exportarPDF(
+                    lineRef,
+                    "Gráfico de Tendencias Eléctricas",
+                    serieOrdenada.map((d) => [
+                      new Date(d.fecha_lectura).toLocaleString(),
+                      d.voltaje,
+                      d.bateria,
+                      d.consumo,
+                    ]),
+                    ["Fecha/Hora", "Voltaje (V)", "Batería (%)", "Consumo (W)"],
+                    "reporte_tendencias"
+                  )
+                }
               >
-                <strong>Tendencias de Voltaje, Batería y Consumo</strong>
-              </div>
-              <div className="card-body" style={{ height: 420 }}>
-                <Line ref={lineRef} data={lineData} options={options} />
-              </div>
-              <div className="card-footer text-center">
-                <button
-                  className="btn btn-success"
-                  onClick={() =>
-                    exportarPDF(
-                      lineRef,
-                      "Gráfico de Tendencias Eléctricas",
-                      serieOrdenada.map((d) => [
-                        new Date(d.fecha_lectura).toLocaleString(),
-                        d.voltaje,
-                        d.bateria,
-                        d.consumo,
-                      ]),
-                      ["Fecha/Hora", "Voltaje (V)", "Batería (%)", "Consumo (W)"],
-                      "reporte_tendencias"
-                    )
-                  }
-                >
-                  🖨️ Exportar PDF
-                </button>
-              </div>
+                <i className="fas fa-file-pdf"></i>
+                Exportar PDF
+              </button>
             </div>
-          </section>
+          </div>
 
-          {/* Barras + Pie */}
-          <section className="row">
-            <div className="col-md-6 mb-4">
-              <div className="card shadow h-100" style={{ borderRadius: 16 }}>
-                <div
-                  className="card-header bg-primary text-white"
-                  style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16 }}
-                >
-                  <strong>Nivel de Batería</strong>
-                </div>
-                <div className="card-body" style={{ height: 360 }}>
-                  <Bar ref={barRef} data={barData} options={options} />
-                </div>
-                <div className="card-footer text-center">
-                  <button
-                    className="btn btn-primary"
-                    onClick={() =>
-                      exportarPDF(
-                        barRef,
-                        "Gráfico de Nivel de Batería",
-                        serieOrdenada.map((d) => [
-                          new Date(d.fecha_lectura).toLocaleString(),
-                          d.bateria,
-                        ]),
-                        ["Fecha/Hora", "Batería (%)"],
-                        "reporte_bateria"
-                      )
-                    }
-                  >
-                    🖨️ Exportar PDF
-                  </button>
-                </div>
+          {/* Grid de gráficos secundarios */}
+          <div className="chart-card chart-card-half animate__animated animate__fadeInUp animate__delay-1s">
+            <div className="chart-header chart-header-primary">
+              <div className="chart-title-section">
+                <i className="fas fa-battery-three-quarters"></i>
+                <h3>Nivel de Batería</h3>
+              </div>
+              <div className="chart-badge">
+                <span className={`status-badge ${baterias[baterias.length - 1] > 70 ? 'status-good' : baterias[baterias.length - 1] > 30 ? 'status-warning' : 'status-danger'}`}>
+                  {baterias[baterias.length - 1] > 70 ? 'Óptimo' : baterias[baterias.length - 1] > 30 ? 'Moderado' : 'Bajo'}
+                </span>
               </div>
             </div>
+            <div className="chart-body chart-body-medium">
+              <Bar ref={barRef} data={barData} options={options} />
+            </div>
+            <div className="chart-footer">
+              <button
+                className="btn-export btn-export-primary"
+                onClick={() =>
+                  exportarPDF(
+                    barRef,
+                    "Gráfico de Nivel de Batería",
+                    serieOrdenada.map((d) => [
+                      new Date(d.fecha_lectura).toLocaleString(),
+                      d.bateria,
+                    ]),
+                    ["Fecha/Hora", "Batería (%)"],
+                    "reporte_bateria"
+                  )
+                }
+              >
+                <i className="fas fa-file-pdf"></i>
+                Exportar PDF
+              </button>
+            </div>
+          </div>
 
-            <div className="col-md-6 mb-4">
-              <div className="card shadow h-100" style={{ borderRadius: 16 }}>
-                <div
-                  className="card-header bg-warning"
-                  style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16 }}
-                >
-                  <strong>Consumo Relativo</strong>
-                </div>
-                <div className="card-body" style={{ height: 360 }}>
-                  <Pie ref={pieRef} data={pieData} options={options} />
-                </div>
-                <div className="card-footer text-center">
-                  <button
-                    className="btn btn-warning text-dark"
-                    onClick={() =>
-                      exportarPDF(
-                        pieRef,
-                        "Gráfico de Consumo Energético",
-                        serieOrdenada.map((d) => [
-                          new Date(d.fecha_lectura).toLocaleString(),
-                          d.consumo,
-                        ]),
-                        ["Fecha/Hora", "Consumo (W)"],
-                        "reporte_consumo"
-                      )
-                    }
-                  >
-                    🖨️ Exportar PDF
-                  </button>
-                </div>
+          <div className="chart-card chart-card-half animate__animated animate__fadeInUp animate__delay-1s">
+            <div className="chart-header chart-header-warning">
+              <div className="chart-title-section">
+                <i className="fas fa-bolt"></i>
+                <h3>Distribución de Consumo</h3>
+              </div>
+              <div className="chart-badge">
+                <span className="consumption-total">
+                  <i className="fas fa-plug"></i>
+                  {consumos.reduce((a, b) => a + b, 0)} W total
+                </span>
               </div>
             </div>
-          </section>
-        </>
+            <div className="chart-body chart-body-medium">
+              <Pie ref={pieRef} data={pieData} options={options} />
+            </div>
+            <div className="chart-footer">
+              <button
+                className="btn-export btn-export-warning"
+                onClick={() =>
+                  exportarPDF(
+                    pieRef,
+                    "Gráfico de Consumo Energético",
+                    serieOrdenada.map((d) => [
+                      new Date(d.fecha_lectura).toLocaleString(),
+                      d.consumo,
+                    ]),
+                    ["Fecha/Hora", "Consumo (W)"],
+                    "reporte_consumo"
+                  )
+                }
+              >
+                <i className="fas fa-file-pdf"></i>
+                Exportar PDF
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
