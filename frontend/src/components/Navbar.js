@@ -158,126 +158,143 @@ function NavBarComponent({ usuario: usuarioProp, onLogout }) {
 
   return (
     <>
-      {/* Header Profesional Integrado */}
-      <header className="header-profesional shadow-lg animate__animated animate__fadeInDown">
+      {/* Header Profesional con Navbar Centrado */}
+      <header className="header-profesional-v2 shadow-lg animate__animated animate__fadeInDown">
         <Container fluid>
-          {/* Sección superior: Logo y título */}
-          <div className="header-top">
-            <div className="d-flex align-items-center gap-3">
-              <div className="logo-wind">
-                <i className="bi bi-wind" style={{ fontSize: "2.5rem" }}></i>
-              </div>
-              <div className="header-title-wrapper">
-                <h1 className="header-title mb-0">Sistema de Energía Eólica</h1>
-                <p className="header-subtitle mb-0">Monitoreo y Control Inteligente</p>
-              </div>
+          {/* Logo y Título */}
+          <div className="header-brand-section">
+            <div className="logo-circle">
+              <i className="bi bi-wind"></i>
             </div>
-
-            {/* Avatar usuario (desktop) */}
-            {!isLoginPage && (
-              <div className="d-none d-lg-flex align-items-center gap-3">
-                <NavDropdown
-                  align="end"
-                  title={
-                    <span className="d-inline-flex align-items-center user-dropdown-trigger">
-                      <span className="user-avatar">
-                        {getInitials(displayName)}
-                      </span>
-                      <div className="user-info">
-                        <div className="user-name">{shouldShowLoading ? "Cargando..." : displayName}</div>
-                        <div className="user-role">{rol === "administrador" ? "Administrador" : "Usuario"}</div>
-                      </div>
-                      <i className="bi bi-chevron-down ms-2"></i>
-                    </span>
-                  }
-                  id="user-nav-dropdown"
-                  className="user-dropdown"
-                >
-                  <NavDropdown.Item onClick={openPerfil}>
-                    <i className="bi bi-person-circle me-2"></i>
-                    Mi perfil
-                  </NavDropdown.Item>
-                  <NavDropdown.Divider />
-                  <NavDropdown.Item onClick={handleLogoutClick}>
-                    <i className="bi bi-box-arrow-right me-2"></i>
-                    Cerrar sesión
-                  </NavDropdown.Item>
-                </NavDropdown>
-              </div>
-            )}
-
-            {/* Botón hamburguesa (mobile) */}
-            {!isLoginPage && (
-              <Button
-                variant="light"
-                onClick={handleShow}
-                className="boton-hamburguesa d-lg-none"
-                aria-label="Abrir menú"
-              >
-                <i className="bi bi-list" style={{ fontSize: "1.5rem" }}></i>
-              </Button>
-            )}
+            <div className="brand-text">
+              <h1 className="brand-title">Sistema Eólico</h1>
+              <p className="brand-subtitle">Monitoreo Inteligente</p>
+            </div>
           </div>
 
-          {/* Navegación (desktop) */}
+          {/* Navegación Centrada (Desktop) */}
           {!isLoginPage && (
-            <nav className="navbar-navegacion d-none d-lg-block">
-              <Nav className="nav-profesional justify-content-start gap-2">
-                <Nav.Link as={Link} to="/dashboard" className="nav-link-profesional">
-                  <i className="bi bi-house-door-fill me-2"></i>
-                  Principal
+            <nav className="navbar-center d-none d-lg-flex">
+              <Nav className="nav-links-center">
+                <Nav.Link 
+                  as={Link} 
+                  to="/dashboard" 
+                  className={`nav-item-modern ${location.pathname === '/dashboard' ? 'active' : ''}`}
+                >
+                  <i className="bi bi-house-door-fill"></i>
+                  <span>Principal</span>
                 </Nav.Link>
-                <Nav.Link as={Link} to="/graficos" className="nav-link-profesional">
-                  <i className="bi bi-graph-up me-2"></i>
-                  Gráficos
+                
+                <Nav.Link 
+                  as={Link} 
+                  to="/graficos" 
+                  className={`nav-item-modern ${location.pathname === '/graficos' ? 'active' : ''}`}
+                >
+                  <i className="bi bi-graph-up"></i>
+                  <span>Gráficos</span>
                 </Nav.Link>
 
                 {rol === "usuario" && (
-                  <Nav.Link as={Link} to="/contactos" className="nav-link-profesional">
-                    <i className="bi bi-people-fill me-2"></i>
-                    Contactos
+                  <Nav.Link 
+                    as={Link} 
+                    to="/contactos" 
+                    className={`nav-item-modern ${location.pathname === '/contactos' ? 'active' : ''}`}
+                  >
+                    <i className="bi bi-people-fill"></i>
+                    <span>Contactos</span>
                   </Nav.Link>
                 )}
 
                 {rol === "administrador" && (
                   <>
-                    <Nav.Link as={Link} to="/usuarios" className="nav-link-profesional">
-                      <i className="bi bi-person-badge-fill me-2"></i>
-                      Usuarios
+                    <Nav.Link 
+                      as={Link} 
+                      to="/usuarios" 
+                      className={`nav-item-modern ${location.pathname === '/usuarios' ? 'active' : ''}`}
+                    >
+                      <i className="bi bi-person-badge-fill"></i>
+                      <span>Usuarios</span>
                     </Nav.Link>
-                    <Nav.Link as={Link} to="/eolicos" className="nav-link-profesional">
-                      <i className="bi bi-clipboard-check-fill me-2"></i>
-                      Alquiler
+                    
+                    <Nav.Link 
+                      as={Link} 
+                      to="/eolicos" 
+                      className={`nav-item-modern ${location.pathname === '/eolicos' ? 'active' : ''}`}
+                    >
+                      <i className="bi bi-clipboard-check-fill"></i>
+                      <span>Alquiler</span>
                     </Nav.Link>
-                    <Nav.Link as={Link} to="/reportes" className="nav-link-profesional">
-                      <i className="bi bi-file-earmark-pdf-fill me-2"></i>
-                      Reportes PDF
-                    </Nav.Link>
-                    <Nav.Link as={Link} to="/alertas" className="nav-link-profesional position-relative">
-                      <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                      Alertas Globales
-                      {alertasCount > 0 && (
-                        <Badge bg="danger" className="ms-2 badge-pulse">
-                          {alertasCount}
-                        </Badge>
-                      )}
+                    
+                    <Nav.Link 
+                      as={Link} 
+                      to="/reportes" 
+                      className={`nav-item-modern ${location.pathname === '/reportes' ? 'active' : ''}`}
+                    >
+                      <i className="bi bi-file-earmark-pdf-fill"></i>
+                      <span>Reportes</span>
                     </Nav.Link>
                   </>
                 )}
 
-                {rol === "usuario" && (
-                  <Nav.Link as={Link} to="/alertas" className="nav-link-profesional position-relative">
-                    <i className="bi bi-bell-fill me-2"></i>
-                    Mis Alertas
-                    {alertasCount > 0 && (
-                      <Badge bg="warning" text="dark" className="ms-2 badge-pulse">
-                        {alertasCount}
-                      </Badge>
-                    )}
-                  </Nav.Link>
-                )}
+                <Nav.Link 
+                  as={Link} 
+                  to="/alertas" 
+                  className={`nav-item-modern ${location.pathname === '/alertas' ? 'active' : ''}`}
+                >
+                  <i className="bi bi-bell-fill"></i>
+                  <span>{rol === "administrador" ? "Alertas" : "Mis Alertas"}</span>
+                  {alertasCount > 0 && (
+                    <Badge bg="danger" className="alert-badge">
+                      {alertasCount}
+                    </Badge>
+                  )}
+                </Nav.Link>
               </Nav>
             </nav>
+          )}
+
+          {/* Usuario (Desktop) */}
+          {!isLoginPage && (
+            <div className="header-user-section d-none d-lg-flex">
+              <NavDropdown
+                align="end"
+                title={
+                  <div className="user-dropdown-modern">
+                    <div className="user-avatar-modern">
+                      {getInitials(displayName)}
+                    </div>
+                    <div className="user-details">
+                      <span className="user-name-modern">{shouldShowLoading ? "Cargando..." : displayName}</span>
+                      <span className="user-role-modern">{rol === "administrador" ? "Admin" : "Usuario"}</span>
+                    </div>
+                    <i className="bi bi-chevron-down"></i>
+                  </div>
+                }
+                id="user-nav-dropdown"
+              >
+                <NavDropdown.Item onClick={openPerfil}>
+                  <i className="bi bi-person-circle me-2"></i>
+                  Mi perfil
+                </NavDropdown.Item>
+                <NavDropdown.Divider />
+                <NavDropdown.Item onClick={handleLogoutClick}>
+                  <i className="bi bi-box-arrow-right me-2"></i>
+                  Cerrar sesión
+                </NavDropdown.Item>
+              </NavDropdown>
+            </div>
+          )}
+
+          {/* Botón hamburguesa (Mobile) */}
+          {!isLoginPage && (
+            <Button
+              variant="light"
+              onClick={handleShow}
+              className="btn-hamburguesa d-lg-none"
+              aria-label="Abrir menú"
+            >
+              <i className="bi bi-list"></i>
+            </Button>
           )}
         </Container>
       </header>
@@ -796,6 +813,299 @@ function NavBarComponent({ usuario: usuarioProp, onLogout }) {
 
         .user-dropdown .dropdown-item:hover {
           background: #f3f4f6;
+        }
+
+        /* ========================================
+           NUEVO NAVBAR PROFESIONAL V2
+           ======================================== */
+        
+        .header-profesional-v2 {
+          background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+          position: sticky;
+          top: 0;
+          z-index: 1000;
+          border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header-profesional-v2 .container-fluid {
+          display: grid;
+          grid-template-columns: auto 1fr auto;
+          align-items: center;
+          gap: 2rem;
+          padding: 1rem 2rem;
+          max-width: 1400px;
+          margin: 0 auto;
+        }
+
+        /* Logo y Brand */
+        .header-brand-section {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .logo-circle {
+          width: 55px;
+          height: 55px;
+          background: linear-gradient(135deg, #ffffff 0%, #e0f2fe 100%);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+          transition: transform 0.3s ease;
+        }
+
+        .logo-circle:hover {
+          transform: rotate(360deg) scale(1.05);
+        }
+
+        .logo-circle i {
+          font-size: 2rem;
+          background: linear-gradient(135deg, #1e40af, #3b82f6);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+
+        .brand-text {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .brand-title {
+          color: white;
+          font-size: 1.5rem;
+          font-weight: 700;
+          margin: 0;
+          line-height: 1.2;
+          text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .brand-subtitle {
+          color: rgba(255, 255, 255, 0.9);
+          font-size: 0.85rem;
+          margin: 0;
+          font-weight: 400;
+        }
+
+        /* Navegación Centrada */
+        .navbar-center {
+          justify-content: center;
+        }
+
+        .nav-links-center {
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(10px);
+          padding: 0.5rem;
+          border-radius: 50px;
+          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-item-modern {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.6rem 1.2rem;
+          border-radius: 25px;
+          color: white !important;
+          font-weight: 500;
+          font-size: 0.95rem;
+          text-decoration: none;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+          overflow: hidden;
+          border: 2px solid transparent;
+        }
+
+        .nav-item-modern i {
+          font-size: 1.1rem;
+          transition: transform 0.3s ease;
+        }
+
+        .nav-item-modern:hover {
+          background: rgba(255, 255, 255, 0.2);
+          transform: translateY(-2px);
+          color: white !important;
+        }
+
+        .nav-item-modern:hover i {
+          transform: scale(1.2);
+        }
+
+        /* Item activo con efecto especial */
+        .nav-item-modern.active {
+          background: linear-gradient(135deg, #ffffff 0%, #e0f2fe 100%);
+          color: #1e40af !important;
+          font-weight: 600;
+          border: 2px solid white;
+          box-shadow: 0 4px 15px rgba(255, 255, 255, 0.3), 
+                      0 0 20px rgba(255, 255, 255, 0.2);
+          animation: activeGlow 2s ease-in-out infinite;
+        }
+
+        .nav-item-modern.active i {
+          color: #1e40af;
+          animation: iconBounce 1s ease infinite;
+        }
+
+        @keyframes activeGlow {
+          0%, 100% { box-shadow: 0 4px 15px rgba(255, 255, 255, 0.3), 0 0 20px rgba(255, 255, 255, 0.2); }
+          50% { box-shadow: 0 6px 20px rgba(255, 255, 255, 0.5), 0 0 30px rgba(255, 255, 255, 0.4); }
+        }
+
+        @keyframes iconBounce {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.15); }
+        }
+
+        /* Badge de alertas */
+        .alert-badge {
+          position: absolute;
+          top: -5px;
+          right: -5px;
+          font-size: 0.7rem;
+          padding: 0.25rem 0.5rem;
+          border-radius: 12px;
+          animation: pulseBadge 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulseBadge {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.2); }
+        }
+
+        /* Usuario Dropdown Modern */
+        .header-user-section {
+          display: flex;
+          align-items: center;
+        }
+
+        .user-dropdown-modern {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.5rem 1rem;
+          background: rgba(255, 255, 255, 0.15);
+          border-radius: 50px;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          transition: all 0.3s ease;
+          cursor: pointer;
+        }
+
+        .user-dropdown-modern:hover {
+          background: rgba(255, 255, 255, 0.25);
+          border-color: white;
+          transform: scale(1.02);
+        }
+
+        .user-avatar-modern {
+          width: 45px;
+          height: 45px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: 700;
+          font-size: 1.1rem;
+          border: 3px solid white;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .user-details {
+          display: flex;
+          flex-direction: column;
+          line-height: 1.2;
+        }
+
+        .user-name-modern {
+          color: white;
+          font-weight: 600;
+          font-size: 0.95rem;
+        }
+
+        .user-role-modern {
+          color: rgba(255, 255, 255, 0.85);
+          font-size: 0.8rem;
+        }
+
+        .user-dropdown-modern i {
+          color: white;
+          font-size: 0.9rem;
+        }
+
+        /* Botón hamburguesa mobile */
+        .btn-hamburguesa {
+          width: 45px;
+          height: 45px;
+          border-radius: 12px;
+          background: rgba(255, 255, 255, 0.2) !important;
+          border: 2px solid white !important;
+          color: white !important;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.3s ease;
+        }
+
+        .btn-hamburguesa:hover {
+          background: white !important;
+          color: #1e40af !important;
+          transform: scale(1.1);
+        }
+
+        .btn-hamburguesa i {
+          font-size: 1.5rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 991px) {
+          .header-profesional-v2 .container-fluid {
+            grid-template-columns: 1fr auto;
+            gap: 1rem;
+            padding: 1rem;
+          }
+
+          .brand-title {
+            font-size: 1.2rem;
+          }
+
+          .brand-subtitle {
+            font-size: 0.75rem;
+          }
+
+          .logo-circle {
+            width: 45px;
+            height: 45px;
+          }
+
+          .logo-circle i {
+            font-size: 1.5rem;
+          }
+        }
+
+        @media (max-width: 576px) {
+          .brand-title {
+            font-size: 1rem;
+          }
+
+          .brand-subtitle {
+            display: none;
+          }
+
+          .logo-circle {
+            width: 40px;
+            height: 40px;
+          }
+
+          .header-brand-section {
+            gap: 0.5rem;
+          }
         }
       `}</style>
     </>

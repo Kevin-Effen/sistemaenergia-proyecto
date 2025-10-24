@@ -405,7 +405,16 @@ app.get('/usuarios', requireAuth, requireRole('administrador'), (req, res) => {
 
   let sql = `
     SELECT 
-      u.*,
+      u.id_usuario,
+      u.cuenta_id,
+      u.rol_id,
+      u.nombres,
+      u.primer_apellido,
+      u.segundo_apellido,
+      u.ci,
+      u.telefono,
+      u.direccion,
+      u.fecha_nacimiento,
       c.usuario,
       r.nombre_rol,
       e.id_eolico      AS eolico_id,
@@ -436,7 +445,7 @@ app.get('/usuarios', requireAuth, requireRole('administrador'), (req, res) => {
     params.push(like, like, like, like, like, like, like, like, like);
   }
 
-  sql += ' ORDER BY u.id_usuario ASC';
+  sql += ' GROUP BY u.id_usuario ORDER BY u.id_usuario ASC';
 
   db.query(sql, params, (err, result) => {
     if (err) return res.status(500).send(err);
@@ -816,25 +825,27 @@ app.get('/alertas/rango', requireAuth, (req, res) => {
 
   // Construir condición de alertas si se requiere
   const alertaCondition = soloAlertas === 'true' 
-    ? `AND ((lr.bateria IS NOT NULL AND lr.bateria < 20) OR (lr.voltaje IS NOT NULL AND lr.voltaje < 10))`
+    ? `AND ((lr.bateria IS NOT NULL AND lr.bateria < 20) 
+         OR (lr.voltaje IS NOT NULL AND lr.voltaje > 15)
+         OR (lr.consumo IS NOT NULL AND lr.consumo > 80))`
     : '';
 
   const sql = `
     SELECT lr.voltaje, lr.bateria, lr.consumo, lr.fecha_lectura
     FROM lecturas_resumen lr
-    JOIN usuarios u ON u.id_usuario = lr.usuario_id
-    WHERE u.cuenta_id = ?
+    WHERE lr.usuario_id = ?
       AND DATE(lr.fecha_lectura) >= ?
       AND DATE(lr.fecha_lectura) <= ?
       ${alertaCondition}
     ORDER BY lr.fecha_lectura DESC
   `;
 
-  db.query(sql, [req.user.cuenta_id, desde, hasta], (err, rows) => {
+  db.query(sql, [req.user.id_usuario, desde, hasta], (err, rows) => {
     if (err) {
       console.error('Error en /alertas/rango:', err);
       return res.status(500).json({ error: 'Error en servidor' });
     }
+    console.log(`[ALERTAS] Usuario ${req.user.id_usuario}: ${rows.length} lecturas encontradas`);
     res.json(rows);
   });
 });
@@ -852,7 +863,9 @@ app.get('/alertas/admin-rango', requireAuth, requireRole('administrador'), (req,
 
   // Construir condición de alertas si se requiere
   const alertaCondition = soloAlertas === 'true'
-    ? `AND ((lr.bateria IS NOT NULL AND lr.bateria < 20) OR (lr.voltaje IS NOT NULL AND lr.voltaje < 10))`
+    ? `AND ((lr.bateria IS NOT NULL AND lr.bateria < 20) 
+         OR (lr.voltaje IS NOT NULL AND lr.voltaje > 15)
+         OR (lr.consumo IS NOT NULL AND lr.consumo > 80))`
     : '';
 
   const sql = `
@@ -864,9 +877,9 @@ app.get('/alertas/admin-rango', requireAuth, requireRole('administrador'), (req,
       c.usuario as login,
       r.nombre_rol as rol
     FROM lecturas_resumen lr
-    JOIN usuarios u ON u.id_usuario = lr.usuario_id
-    JOIN cuentas c ON c.id_cuenta = u.cuenta_id
-    JOIN roles r ON r.id_rol = u.rol_id
+    LEFT JOIN cuentas c ON c.id_cuenta = lr.cuenta_id
+    LEFT JOIN usuarios u ON u.cuenta_id = lr.cuenta_id
+    LEFT JOIN roles r ON r.id_rol = u.rol_id
     WHERE DATE(lr.fecha_lectura) >= ?
       AND DATE(lr.fecha_lectura) <= ?
       ${alertaCondition}
@@ -878,6 +891,7 @@ app.get('/alertas/admin-rango', requireAuth, requireRole('administrador'), (req,
       console.error('Error en /alertas/admin-rango:', err);
       return res.status(500).json({ error: 'Error en servidor' });
     }
+    console.log(`[ALERTAS ADMIN]: ${rows.length} lecturas encontradas`);
     res.json(rows);
   });
 });
@@ -1662,7 +1676,7 @@ app.get('/eolicos/:id/recibo', requireAuth, requireRole('administrador'), (req, 
       { width: W - (MARGIN * 2 + 64) }
     );
     doc.font('Helvetica').fontSize(10).fillColor('#E3F2FD').text(new Date().toLocaleString('es-BO'), W - MARGIN - 200, 18, {
-      width: 200,
+      width:  200,
       align: 'right',
     });
     doc.restore();
@@ -2018,6 +2032,156 @@ app.get('/cliente/lecturas', requireAuth, (req, res) => {
 // --- Health (si no lo tienes) ---
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'backend', time: new Date().toISOString() });
+});
+
+/* =========================================================
+   MANUAL DE USUARIO PDF
+========================================================= */
+app.get('/api/manual/generar-pdf', requireAuth, (req, res) => {
+  try {
+    const doc = new PDFDocument({ 
+      margin: 50,
+      size: 'A4'
+    });
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="Manual_Usuario_Sistema_Eolico.pdf"');
+    
+    doc.pipe(res);
+    
+    // PORTADA
+    doc.fontSize(28).fillColor('#0d6efd').text('Manual de Usuario', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(20).fillColor('#333').text('Sistema de Energía Eólica', { align: 'center' });
+    doc.moveDown(0.3);
+    doc.fontSize(12).fillColor('#666').text('Versión 1.0 - 2025', { align: 'center' });
+    doc.moveDown(3);
+    
+    // ÍNDICE
+    doc.fontSize(16).fillColor('#0d6efd').text('Índice', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11).fillColor('#333');
+    doc.text('1. Introducción ................................................ 2');
+    doc.text('2. Acceso al Sistema .......................................... 2');
+    doc.text('3. Panel de Control (Dashboard) ............................... 3');
+    doc.text('4. Mis Dispositivos ............................................ 3');
+    doc.text('5. Sistema de Alertas .......................................... 4');
+    doc.text('6. Gestión de Alquileres ....................................... 4');
+    doc.text('7. Soporte y Contacto .......................................... 5');
+    doc.moveDown(2);
+    
+    // CONTENIDO
+    doc.addPage();
+    
+    // 1. INTRODUCCIÓN
+    doc.fontSize(16).fillColor('#0d6efd').text('1. Introducción', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11).fillColor('#333');
+    doc.text('Bienvenido al Sistema de Energía Eólica. Esta aplicación te permite monitorear en tiempo real tus dispositivos de energía renovable, visualizar lecturas de voltaje, corriente y potencia, gestionar alertas y administrar tus alquileres de equipos eólicos.', { align: 'justify' });
+    doc.moveDown(1);
+    
+    // 2. ACCESO AL SISTEMA
+    doc.fontSize(16).fillColor('#0d6efd').text('2. Acceso al Sistema', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11).fillColor('#333');
+    doc.text('Para ingresar al sistema necesitas credenciales de acceso (usuario y contraseña) proporcionadas por el administrador.');
+    doc.moveDown(0.5);
+    doc.fontSize(12).fillColor('#444').text('Pasos para iniciar sesión:', { underline: true });
+    doc.fontSize(11).fillColor('#333');
+    doc.text('  • Ingresa a la URL del sistema en tu navegador web');
+    doc.text('  • Introduce tu nombre de usuario');
+    doc.text('  • Introduce tu contraseña');
+    doc.text('  • Haz clic en "Iniciar Sesión"');
+    doc.moveDown(0.5);
+    doc.text('Si olvidaste tu contraseña, utiliza la opción "¿Olvidaste tu contraseña?" en la pantalla de inicio de sesión.');
+    doc.moveDown(1);
+    
+    // 3. DASHBOARD
+    doc.fontSize(16).fillColor('#0d6efd').text('3. Panel de Control (Dashboard)', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11).fillColor('#333');
+    doc.text('El Dashboard es tu pantalla principal donde podrás visualizar:', { align: 'justify' });
+    doc.text('  • Resumen de tus dispositivos activos');
+    doc.text('  • Lecturas en tiempo real de voltaje, corriente y potencia');
+    doc.text('  • Gráficas de tendencias de las últimas 24 horas');
+    doc.text('  • Estado de la batería de tus dispositivos');
+    doc.text('  • Alertas recientes del sistema');
+    doc.moveDown(1);
+    
+    // 4. MIS DISPOSITIVOS
+    doc.fontSize(16).fillColor('#0d6efd').text('4. Mis Dispositivos', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11).fillColor('#333');
+    doc.text('En esta sección puedes ver todos tus dispositivos eólicos asignados, su estado actual y las lecturas más recientes. Cada dispositivo muestra:', { align: 'justify' });
+    doc.text('  • Código identificador único');
+    doc.text('  • Estado operacional (activo/inactivo)');
+    doc.text('  • Última lectura registrada');
+    doc.text('  • Nivel de batería');
+    doc.moveDown(1);
+    
+    // 5. ALERTAS
+    doc.addPage();
+    doc.fontSize(16).fillColor('#0d6efd').text('5. Sistema de Alertas', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11).fillColor('#333');
+    doc.text('El sistema genera alertas automáticas cuando detecta situaciones que requieren tu atención:', { align: 'justify' });
+    doc.moveDown(0.5);
+    doc.fontSize(12).fillColor('#dc3545').text('Alerta de Batería Baja:');
+    doc.fontSize(11).fillColor('#333');
+    doc.text('Se activa cuando la batería está por debajo del 20%. Debes revisar las conexiones o programar una carga.');
+    doc.moveDown(0.5);
+    doc.fontSize(12).fillColor('#ffc107').text('Alerta de Voltaje Anormal:');
+    doc.fontSize(11).fillColor('#333');
+    doc.text('Indica que el voltaje está fuera del rango normal de operación.');
+    doc.moveDown(0.5);
+    doc.fontSize(12).fillColor('#17a2b8').text('Alerta de Corriente Alta:');
+    doc.fontSize(11).fillColor('#333');
+    doc.text('Se genera cuando la corriente supera los límites seguros establecidos.');
+    doc.moveDown(1);
+    
+    // 6. ALQUILERES
+    doc.fontSize(16).fillColor('#0d6efd').text('6. Gestión de Alquileres', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11).fillColor('#333');
+    doc.text('Si tienes un contrato de alquiler de equipos eólicos, podrás:', { align: 'justify' });
+    doc.text('  • Ver el estado de tu alquiler actual');
+    doc.text('  • Consultar el plan de cuotas mensuales');
+    doc.text('  • Verificar pagos realizados');
+    doc.text('  • Descargar recibos en formato PDF');
+    doc.moveDown(1);
+    
+    // 7. SOPORTE
+    doc.fontSize(16).fillColor('#0d6efd').text('7. Soporte y Contacto', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(11).fillColor('#333');
+    doc.text('Si necesitas ayuda o tienes alguna consulta:', { align: 'justify' });
+    doc.moveDown(0.5);
+    doc.fontSize(12).fillColor('#444').text('📧 Email:', { continued: true });
+    doc.fontSize(11).fillColor('#0d6efd').text(' countableuncountable@gmail.com');
+    doc.moveDown(0.3);
+    doc.fontSize(12).fillColor('#444').text('📱 Teléfono/WhatsApp:', { continued: true });
+    doc.fontSize(11).fillColor('#0d6efd').text(' +591 72641958');
+    doc.moveDown(0.3);
+    doc.fontSize(12).fillColor('#444').text('📍 Dirección:', { continued: true });
+    doc.fontSize(11).fillColor('#333').text(' Calle Manuel Virreira #0077, Cochabamba, Bolivia');
+    doc.moveDown(2);
+    
+    // PIE DE PÁGINA
+    doc.fontSize(9).fillColor('#999').text(
+      '────────────────────────────────────────────────────────────────',
+      { align: 'center' }
+    );
+    doc.text('Sistema de Energía Eólica © 2025 - Todos los derechos reservados', { align: 'center' });
+    doc.text('Documento generado automáticamente', { align: 'center' });
+    
+    doc.end();
+    
+    console.log('✅ Manual PDF generado exitosamente para usuario:', req.user.usuario);
+    
+  } catch (err) {
+    console.error('❌ Error al generar manual PDF:', err);
+    res.status(500).json({ mensaje: 'Error al generar el manual PDF' });
+  }
 });
 
 // --- START SERVER (debe existir solo una vez y al final) ---
