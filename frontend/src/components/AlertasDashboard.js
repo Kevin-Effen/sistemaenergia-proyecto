@@ -299,6 +299,30 @@ function AlertasDashboard() {
             Lecturas {rol === "administrador" ? "— todos los usuarios" : ""}
           </h5>
 
+          {/* Recomendaciones para asistencia */}
+          {(voltajeAlto || bateriaBaja || consumoAlto) && (
+            <div className="alert alert-info mb-4 text-start">
+              <strong>Recomendaciones para asistencia:</strong>
+              <ul className="mb-0 mt-2">
+                {voltajeAlto && (
+                  <li>
+                    <b>Voltaje alto:</b> Verificar el regulador de voltaje, revisar conexiones eléctricas y consultar si el usuario ha realizado cambios recientes en el sistema.
+                  </li>
+                )}
+                {bateriaBaja && (
+                  <li>
+                    <b>Batería baja:</b> Sugerir al usuario revisar el estado de la batería, comprobar si hay consumo excesivo y verificar la carga solar/eólica.
+                  </li>
+                )}
+                {consumoAlto && (
+                  <li>
+                    <b>Consumo alto:</b> Recomendar al usuario identificar dispositivos conectados, reducir cargas innecesarias y revisar el historial de consumo.
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
+
           {/* Estado Vacío Mejorado */}
           {!cargando && datos.length === 0 && (
             <div className="text-center py-5">
