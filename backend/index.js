@@ -825,25 +825,27 @@ app.get('/alertas/rango', requireAuth, (req, res) => {
 
   // Construir condición de alertas si se requiere
   const alertaCondition = soloAlertas === 'true' 
-    ? `AND ((lr.bateria IS NOT NULL AND lr.bateria < 20) OR (lr.voltaje IS NOT NULL AND lr.voltaje < 10))`
+    ? `AND ((lr.bateria IS NOT NULL AND lr.bateria < 20) 
+         OR (lr.voltaje IS NOT NULL AND lr.voltaje > 15)
+         OR (lr.consumo IS NOT NULL AND lr.consumo > 80))`
     : '';
 
   const sql = `
     SELECT lr.voltaje, lr.bateria, lr.consumo, lr.fecha_lectura
     FROM lecturas_resumen lr
-    JOIN usuarios u ON u.id_usuario = lr.usuario_id
-    WHERE u.cuenta_id = ?
+    WHERE lr.usuario_id = ?
       AND DATE(lr.fecha_lectura) >= ?
       AND DATE(lr.fecha_lectura) <= ?
       ${alertaCondition}
     ORDER BY lr.fecha_lectura DESC
   `;
 
-  db.query(sql, [req.user.cuenta_id, desde, hasta], (err, rows) => {
+  db.query(sql, [req.user.id_usuario, desde, hasta], (err, rows) => {
     if (err) {
       console.error('Error en /alertas/rango:', err);
       return res.status(500).json({ error: 'Error en servidor' });
     }
+    console.log(`[ALERTAS] Usuario ${req.user.id_usuario}: ${rows.length} lecturas encontradas`);
     res.json(rows);
   });
 });
@@ -861,7 +863,9 @@ app.get('/alertas/admin-rango', requireAuth, requireRole('administrador'), (req,
 
   // Construir condición de alertas si se requiere
   const alertaCondition = soloAlertas === 'true'
-    ? `AND ((lr.bateria IS NOT NULL AND lr.bateria < 20) OR (lr.voltaje IS NOT NULL AND lr.voltaje < 10))`
+    ? `AND ((lr.bateria IS NOT NULL AND lr.bateria < 20) 
+         OR (lr.voltaje IS NOT NULL AND lr.voltaje > 15)
+         OR (lr.consumo IS NOT NULL AND lr.consumo > 80))`
     : '';
 
   const sql = `
@@ -873,9 +877,9 @@ app.get('/alertas/admin-rango', requireAuth, requireRole('administrador'), (req,
       c.usuario as login,
       r.nombre_rol as rol
     FROM lecturas_resumen lr
-    JOIN usuarios u ON u.id_usuario = lr.usuario_id
-    JOIN cuentas c ON c.id_cuenta = u.cuenta_id
-    JOIN roles r ON r.id_rol = u.rol_id
+    LEFT JOIN cuentas c ON c.id_cuenta = lr.cuenta_id
+    LEFT JOIN usuarios u ON u.cuenta_id = lr.cuenta_id
+    LEFT JOIN roles r ON r.id_rol = u.rol_id
     WHERE DATE(lr.fecha_lectura) >= ?
       AND DATE(lr.fecha_lectura) <= ?
       ${alertaCondition}
@@ -887,6 +891,7 @@ app.get('/alertas/admin-rango', requireAuth, requireRole('administrador'), (req,
       console.error('Error en /alertas/admin-rango:', err);
       return res.status(500).json({ error: 'Error en servidor' });
     }
+    console.log(`[ALERTAS ADMIN]: ${rows.length} lecturas encontradas`);
     res.json(rows);
   });
 });
@@ -1669,7 +1674,7 @@ app.get('/eolicos/:id/recibo', requireAuth, requireRole('administrador'), (req, 
       { width: W - (MARGIN * 2 + 64) }
     );
     doc.font('Helvetica').fontSize(10).fillColor('#E3F2FD').text(new Date().toLocaleString('es-BO'), W - MARGIN - 200, 18, {
-      width: 200,
+      width:  200,
       align: 'right',
     });
     doc.restore();
