@@ -27,61 +27,10 @@ const UMBRAL = {
   CONSUMO_ALTO: 80,   // W
 };
 
-// ---- Utilidades (formato y mock) ----
+
+// ---- Utilidades (formato) ----
 const fmt = (n, dec = 2, suf = "") =>
   Number.isFinite(Number(n)) ? `${Number(n).toFixed(dec)}${suf}` : "—";
-
-function generarLecturasMock(n = 24) {
-  const base = new Date();
-  const out = [];
-  let bateria = 92;
-  for (let i = n - 1; i >= 0; i--) {
-    const t = new Date(base.getTime() - i * 60 * 1000); // cada minuto
-    const k = (n - i) / n;
-    const voltaje = 12.6 + Math.sin(k * Math.PI * 2) * 0.4 + (Math.random() - 0.5) * 0.15;
-    bateria = Math.max(10, bateria - Math.random() * 0.7);
-    const consumo = 52 + Math.cos(k * Math.PI * 2) * 7 + (Math.random() - 0.5) * 4;
-
-    out.push({
-      fecha_lectura: t.toISOString(),
-      voltaje: Number(voltaje.toFixed(2)),
-      bateria: Number(bateria.toFixed(0)),
-      consumo: Number(consumo.toFixed(1)),
-    });
-  }
-  // Admin ve “todos los usuarios”: añadimos un login ficticio
-  return out.map((d, i) => ({ ...d, login: `user${(i % 3) + 1}`, rol: "usuario" }));
-}
-
-function generarAlertasDesdeLecturas(lects) {
-  return lects
-    .filter(
-      (d) =>
-        d.voltaje > UMBRAL.VOLTAJE_ALTO ||
-        d.bateria < UMBRAL.BATERIA_BAJA ||
-        d.consumo > UMBRAL.CONSUMO_ALTO
-    )
-    .slice(-8)
-    .reverse();
-}
-
-/** MOCK de usuarios con eólico para modo demo */
-function generarUsuariosEolicosMock(n = 10) {
-  const arr = Array.from({ length: n }).map((_, i) => {
-    const id = i + 1;
-    const asignado = Math.random() > 0.25; // 75% asignados
-    const habil = asignado ? (Math.random() > 0.4 ? 1 : 0) : 0; // 60% de los asignados, activados
-    return {
-      id_usuario: id,
-      usuario: `user${id}@demo.com`,
-      nombres: `Usuario ${id}`,
-      primer_apellido: "Demo",
-      eolico_codigo: asignado ? `EOL-${String(1000 + id)}` : null,
-      eolico_habilitado: habil,
-    };
-  });
-  return arr;
-}
 
 export default function DashboardAdmin() {
   const navigate = useNavigate();
@@ -95,7 +44,7 @@ export default function DashboardAdmin() {
   }, [navigate]);
 
   // ---- Estado ----
-  const [usarMock, setUsarMock] = useState(true);  // 🔀 alterna mock/real
+  // Eliminado: estado y lógica de datos demo
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
@@ -114,29 +63,19 @@ export default function DashboardAdmin() {
     setCargando(true);
     setCargandoEolicos(true);
     try {
-      if (usarMock) {
-        // lecturas / alertas
-        await new Promise((r) => setTimeout(r, 250));
-        const m = generarLecturasMock(30);
-        setLecturas(m);
-        setAlertas(generarAlertasDesdeLecturas(m));
-        // usuarios/eólicos mock
-        setUsuariosEolicos(generarUsuariosEolicosMock(12));
-      } else {
-        // /resumen (admin) y /alertas
-        const [r1, r2, r3] = await Promise.all([
-          api.get("/resumen"),
-          api.get("/alertas"),
-          api.get("/usuarios"), // ← trae eolico_codigo y eolico_habilitado (ver backend)
-        ]);
+      // Solo datos reales
+      const [r1, r2, r3] = await Promise.all([
+        api.get("/resumen"),
+        api.get("/alertas"),
+        api.get("/usuarios"), // ← trae eolico_codigo y eolico_habilitado (ver backend)
+      ]);
 
-        const serie = (Array.isArray(r1.data) ? r1.data : []).slice().sort(
-          (a, b) => new Date(a.fecha_lectura) - new Date(b.fecha_lectura)
-        );
-        setLecturas(serie);
-        setAlertas(Array.isArray(r2.data) ? r2.data : []);
-        setUsuariosEolicos(Array.isArray(r3.data) ? r3.data : []);
-      }
+      const serie = (Array.isArray(r1.data) ? r1.data : []).slice().sort(
+        (a, b) => new Date(a.fecha_lectura) - new Date(b.fecha_lectura)
+      );
+      setLecturas(serie);
+      setAlertas(Array.isArray(r2.data) ? r2.data : []);
+      setUsuariosEolicos(Array.isArray(r3.data) ? r3.data : []);
     } catch (e) {
       if (e?.response?.status === 401) {
         localStorage.clear();
@@ -152,58 +91,17 @@ export default function DashboardAdmin() {
       setCargando(false);
       setCargandoEolicos(false);
     }
-  }, [usarMock, navigate]);
+  }, [navigate]);
 
   useEffect(() => {
     cargar();
-    // Auto-refresco (mock cada 5s, real cada 30s)
-    const ms = usarMock ? 5000 : 30000;
+    // Auto-refresco solo para datos reales cada 30s
+    const ms = 30000;
     const id = setInterval(() => {
-      if (usarMock) {
-        // refresco mock "en vivo"
-        setLecturas((prev) => {
-          if (prev.length === 0) return generarLecturasMock(30);
-          const last = prev[prev.length - 1];
-          const t = new Date(last.fecha_lectura);
-          t.setMinutes(t.getMinutes() + 1);
-
-          const voltaje = (last.voltaje ?? 12.6) + (Math.random() - 0.5) * 0.18;
-          const bateria = Math.max(10, (last.bateria ?? 85) - Math.random() * 0.6);
-          const consumo = (last.consumo ?? 52) + (Math.random() - 0.5) * 3.2;
-
-          const nuevo = {
-            fecha_lectura: t.toISOString(),
-            voltaje: Number(voltaje.toFixed(2)),
-            bateria: Number(bateria.toFixed(0)),
-            consumo: Number(consumo.toFixed(1)),
-            login: `user${((prev.length + 1) % 3) + 1}`,
-            rol: "usuario",
-          };
-          const next = [...prev.slice(-29), nuevo];
-          setAlertas(generarAlertasDesdeLecturas(next));
-          return next;
-        });
-
-        // refresco mock de usuarios/eólicos cada 3 ciclos aprox
-        setUsuariosEolicos((prev) => {
-          if (prev.length === 0) return generarUsuariosEolicosMock(12);
-          // hacer un flip aleatorio de un usuario
-          const idx = Math.floor(Math.random() * prev.length);
-          const copy = [...prev];
-          if (copy[idx].eolico_codigo) {
-            copy[idx] = {
-              ...copy[idx],
-              eolico_habilitado: copy[idx].eolico_habilitado ? 0 : 1,
-            };
-          }
-          return copy;
-        });
-      } else {
-        cargar();
-      }
+      cargar();
     }, ms);
     return () => clearInterval(id);
-  }, [cargar, usarMock]);
+  }, [cargar]);
 
   // ---- Derivados ----
   const ultima = lecturas.length ? lecturas[lecturas.length - 1] : null;
@@ -211,9 +109,17 @@ export default function DashboardAdmin() {
     ? new Date(ultima.fecha_lectura).toLocaleString()
     : "—";
 
-  const voltajeAlto = lecturas.some((d) => Number(d.voltaje) > UMBRAL.VOLTAJE_ALTO);
-  const bateriaBaja = lecturas.some((d) => Number(d.bateria) < UMBRAL.BATERIA_BAJA);
-  const consumoAlto = lecturas.some((d) => Number(d.consumo) > UMBRAL.CONSUMO_ALTO);
+
+  // Filtro y conteo de alertas
+  const [filtroAlerta, setFiltroAlerta] = useState("todas");
+  const voltajeAltoCount = lecturas.filter((d) => Number(d.voltaje) > UMBRAL.VOLTAJE_ALTO).length;
+  const bateriaBajaCount = lecturas.filter((d) => Number(d.bateria) < UMBRAL.BATERIA_BAJA).length;
+  const consumoAltoCount = lecturas.filter((d) => Number(d.consumo) > UMBRAL.CONSUMO_ALTO).length;
+  const hayAlerta =
+    (filtroAlerta === "todas" && (voltajeAltoCount > 0 || bateriaBajaCount > 0 || consumoAltoCount > 0)) ||
+    (filtroAlerta === "voltaje" && voltajeAltoCount > 0) ||
+    (filtroAlerta === "bateria" && bateriaBajaCount > 0) ||
+    (filtroAlerta === "consumo" && consumoAltoCount > 0);
 
   const labels = useMemo(
     () =>
@@ -271,13 +177,13 @@ export default function DashboardAdmin() {
         title: { display: true, text: "Tendencias globales (últimas lecturas)" },
     },
       interaction: { mode: "nearest", intersect: false },
-      animation: { duration: usarMock ? 600 : 300, easing: "easeOutQuart" },
+  animation: { duration: 300, easing: "easeOutQuart" },
       scales: {
         y: { beginAtZero: false },
         x: { ticks: { maxRotation: 0, autoSkip: true } },
       },
     }),
-    [usarMock]
+  []
   );
 
   // ---- KPIs EÓLICOS (derivados de usuariosEolicos) ----
@@ -325,13 +231,6 @@ export default function DashboardAdmin() {
             <div className="text-muted">Visión global del sistema</div>
           </div>
           <div className="d-flex align-items-center gap-3">
-            <Form.Check
-              type="switch"
-              id="switchMock"
-              label="Usar datos de prueba"
-              checked={usarMock}
-              onChange={() => setUsarMock((v) => !v)}
-            />
             <Button variant="outline-secondary" onClick={cargar} disabled={cargando || cargandoEolicos}>
               {(cargando || cargandoEolicos) ? "Cargando…" : "Actualizar ahora"}
             </Button>
@@ -341,60 +240,49 @@ export default function DashboardAdmin() {
 
       {error && <div className="alert alert-danger">{error}</div>}
 
-      {/* Estado del sistema */}
+
+      {/* Estado del sistema con detalles y filtro */}
       <div
-        className={`mb-4 p-3 border rounded d-flex align-items-center justify-content-between ${
-          voltajeAlto || bateriaBaja || consumoAlto ? "bg-danger text-white" : "bg-success text-white"
-        }`}
+        className={`mb-4 p-3 border rounded ${hayAlerta ? "bg-danger text-white" : "bg-success text-white"}`}
       >
-        <strong>
-          {voltajeAlto || bateriaBaja || consumoAlto ? "🚨 Sistema en alerta" : "✅ Sistema estable"}
-        </strong>
-        <small>Última actualización: {ultimaFecha}</small>
+        <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <div>
+            <strong>
+              {hayAlerta ? "🚨 Sistema en alerta" : "✅ Sistema estable"}
+            </strong>
+            {/* Detalles de alerta */}
+            {hayAlerta && (
+              <ul className="mb-0 mt-2" style={{ listStyle: "none", paddingLeft: 0 }}>
+                {(filtroAlerta === "todas" || filtroAlerta === "voltaje") && voltajeAltoCount > 0 && (
+                  <li>Voltaje alto: {voltajeAltoCount} registro(s) fuera de rango</li>
+                )}
+                {(filtroAlerta === "todas" || filtroAlerta === "bateria") && bateriaBajaCount > 0 && (
+                  <li>Batería baja: {bateriaBajaCount} registro(s) fuera de rango</li>
+                )}
+                {(filtroAlerta === "todas" || filtroAlerta === "consumo") && consumoAltoCount > 0 && (
+                  <li>Consumo alto: {consumoAltoCount} registro(s) fuera de rango</li>
+                )}
+              </ul>
+            )}
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <Form.Select
+              size="sm"
+              value={filtroAlerta}
+              onChange={e => setFiltroAlerta(e.target.value)}
+              style={{ minWidth: 140 }}
+            >
+              <option value="todas">Todas las alertas</option>
+              <option value="voltaje">Solo voltaje</option>
+              <option value="bateria">Solo batería</option>
+              <option value="consumo">Solo consumo</option>
+            </Form.Select>
+            <small>Última actualización: {ultimaFecha}</small>
+          </div>
+        </div>
       </div>
 
-      {/* KPIs rápidos */}
-      <Row className="g-3 mb-4">
-        <Col md={4}>
-          <Card className="shadow-sm border-0 h-100">
-            <Card.Body className="d-flex justify-content-between align-items-center">
-              <div>
-                <div className="text-muted small mb-1">Voltaje alto</div>
-                <div className={voltajeAlto ? "text-danger fw-bold" : "text-success fw-bold"}>
-                  {voltajeAlto ? `Sí (> ${UMBRAL.VOLTAJE_ALTO} V)` : "No"}
-                </div>
-              </div>
-              <div style={{ fontSize: 28 }}>🔌</div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={4}>
-          <Card className="shadow-sm border-0 h-100">
-            <Card.Body className="d-flex justify-content-between align-items-center">
-              <div>
-                <div className="text-muted small mb-1">Batería baja</div>
-                <div className={bateriaBaja ? "text-warning fw-bold" : "text-success fw-bold"}>
-                  {bateriaBaja ? `Sí (< ${UMBRAL.BATERIA_BAJA} %)` : "No"}
-                </div>
-              </div>
-              <div style={{ fontSize: 28 }}>🔋</div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={4}>
-          <Card className="shadow-sm border-0 h-100">
-            <Card.Body className="d-flex justify-content-between align-items-center">
-              <div>
-                <div className="text-muted small mb-1">Consumo alto</div>
-                <div className={consumoAlto ? "text-info fw-bold" : "text-success fw-bold"}>
-                  {consumoAlto ? `Sí (> ${UMBRAL.CONSUMO_ALTO} W)` : "No"}
-                </div>
-              </div>
-              <div style={{ fontSize: 28 }}>⚡</div>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
+
 
       {/* === NUEVO BLOQUE: Estado de sistemas eólicos === */}
       <Card className="shadow-sm border-0 mb-4">
