@@ -911,23 +911,25 @@ app.get('/eolicos', requireAuth, requireRole('administrador'), (req, res) => {
       e.codigo,
       e.tarifa_mes,
       e.costo_instalacion,
-      e.deposito,
-      e.costo_operativo_dia,
+  -- e.deposito, // Campo eliminado porque no existe en la tabla
       e.activo,
       e.habilitado,
       e.usuario_id,
       e.fecha_creacion,
-      u.nombres,
-      u.primer_apellido,
-      u.segundo_apellido,
-      c.usuario AS login
+      IFNULL(u.nombres, '') AS nombres,
+      IFNULL(u.primer_apellido, '') AS primer_apellido,
+      IFNULL(u.segundo_apellido, '') AS segundo_apellido,
+      IFNULL(c.usuario, '') AS login
     FROM eolicos e
     LEFT JOIN usuarios u ON u.id_usuario = e.usuario_id
     LEFT JOIN cuentas c  ON c.id_cuenta  = u.cuenta_id
     ORDER BY e.id_eolico ASC
   `;
   db.query(sql, (err, rows) => {
-    if (err) return res.status(500).json({ mensaje: 'Error en servidor' });
+    if (err) {
+      console.error('Error SQL /eolicos:', err);
+      return res.status(500).json({ mensaje: 'Error en servidor', error: err });
+    }
     res.json(rows || []);
   });
 });
