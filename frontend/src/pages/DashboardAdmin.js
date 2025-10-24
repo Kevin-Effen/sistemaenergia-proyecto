@@ -215,69 +215,82 @@ export default function DashboardAdmin() {
   }, [usuariosEolicos]);
 
   return (
-    <div className="container py-4">
+  <div className="container-fluid py-4" style={{ maxWidth: 1400, margin: "0 auto" }}>
 
       {/* Encabezado */}
       <div
-        className="rounded-3 p-4 mb-4 shadow-sm"
+        className="rounded-4 p-4 mb-4 shadow-sm bg-white"
         style={{
-          background: "linear-gradient(135deg, rgba(0,123,255,.08), rgba(40,167,69,.08))",
-          border: "1px solid rgba(0,0,0,0.05)",
+          background: "linear-gradient(90deg, #e3f2fd 0%, #e9fbe5 100%)",
+          border: "1px solid #e0e0e0",
+          boxShadow: "0 4px 24px rgba(33,150,243,0.08)",
         }}
       >
-        <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
-          <div>
-            <h2 className="mb-1">Administrador</h2>
-            <div className="text-muted">Visión global del sistema</div>
+        <div className="row align-items-center g-3">
+          <div className="col-12 col-md-7 d-flex align-items-center gap-3">
+            <img src="/logo-azul.svg" alt="Logo" style={{ width: 56, height: 56, borderRadius: 16, boxShadow: "0 2px 8px #b3e5fc" }} />
+            <div>
+              <h2 className="mb-1 fw-bold" style={{ color: "#1976d2", fontSize: 32 }}>Panel Administrador</h2>
+              <div className="text-muted" style={{ fontSize: 20 }}>Visión global del sistema eólico</div>
+            </div>
           </div>
-          <div className="d-flex align-items-center gap-3">
-            <Button variant="outline-secondary" onClick={cargar} disabled={cargando || cargandoEolicos}>
+          <div className="col-12 col-md-5 d-flex justify-content-md-end align-items-center gap-3 mt-3 mt-md-0">
+            <Button variant="primary" onClick={cargar} disabled={cargando || cargandoEolicos} style={{ fontWeight: 500, fontSize: 18, padding: "10px 28px" }}>
               {(cargando || cargandoEolicos) ? "Cargando…" : "Actualizar ahora"}
             </Button>
           </div>
         </div>
       </div>
 
-      {error && <div className="alert alert-danger">{error}</div>}
+  {error && <div className="alert alert-danger rounded-3 shadow-sm mb-3" style={{ fontSize: 18 }}>{error}</div>}
 
 
       {/* Estado del sistema con detalles y filtro */}
       <div
-        className={`mb-4 p-3 border rounded ${hayAlerta ? "bg-danger text-white" : "bg-success text-white"}`}
+        className={`mb-4 p-3 border rounded-4 shadow-sm ${hayAlerta ? "bg-danger text-white" : "bg-success text-white"}`}
+        style={{ fontSize: 18, border: hayAlerta ? "2px solid #d32f2f" : "2px solid #388e3c", boxShadow: hayAlerta ? "0 2px 12px #d32f2f33" : "0 2px 12px #388e3c33" }}
       >
-        <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
-          <div>
-            <strong>
+        <div className="row align-items-center g-3">
+          <div className="col-12 col-md-8">
+            <strong style={{ fontSize: 22 }}>
               {hayAlerta ? "🚨 Sistema en alerta" : "✅ Sistema estable"}
             </strong>
             {/* Detalles de alerta */}
             {hayAlerta && (
-              <ul className="mb-0 mt-2" style={{ listStyle: "none", paddingLeft: 0 }}>
+              <ul className="mb-0 mt-2" style={{ listStyle: "none", paddingLeft: 0, fontSize: 17 }}>
                 {(filtroAlerta === "todas" || filtroAlerta === "voltaje") && voltajeAltoCount > 0 && (
-                  <li>Voltaje alto: {voltajeAltoCount} registro(s) fuera de rango</li>
+                  <li>🔌 Voltaje alto: <b>{voltajeAltoCount}</b> registro(s) fuera de rango</li>
                 )}
                 {(filtroAlerta === "todas" || filtroAlerta === "bateria") && bateriaBajaCount > 0 && (
-                  <li>Batería baja: {bateriaBajaCount} registro(s) fuera de rango</li>
+                  <li>🔋 Batería baja: <b>{bateriaBajaCount}</b> registro(s) fuera de rango</li>
                 )}
                 {(filtroAlerta === "todas" || filtroAlerta === "consumo") && consumoAltoCount > 0 && (
-                  <li>Consumo alto: {consumoAltoCount} registro(s) fuera de rango</li>
+                  <li>⚡ Consumo alto: <b>{consumoAltoCount}</b> registro(s) fuera de rango</li>
                 )}
               </ul>
             )}
           </div>
-          <div className="d-flex align-items-center gap-2">
+          <div className="col-12 col-md-4 d-flex flex-column flex-md-row align-items-md-center gap-2 mt-3 mt-md-0 justify-content-md-end">
             <Form.Select
               size="sm"
               value={filtroAlerta}
               onChange={e => setFiltroAlerta(e.target.value)}
-              style={{ minWidth: 140 }}
+              style={{ minWidth: 170, fontSize: 16, fontWeight: 500 }}
             >
               <option value="todas">Todas las alertas</option>
               <option value="voltaje">Solo voltaje</option>
               <option value="bateria">Solo batería</option>
               <option value="consumo">Solo consumo</option>
             </Form.Select>
-            <small>Última actualización: {ultimaFecha}</small>
+            <Button
+              variant={hayAlerta ? "light" : "outline-primary"}
+              size="sm"
+              onClick={() => window.location.href = '/alertas'}
+              style={{ fontWeight: 500, fontSize: 16 }}
+            >
+              Ver en alertas
+            </Button>
+            <small style={{ fontSize: 16 }}>Última actualización: {ultimaFecha}</small>
           </div>
         </div>
       </div>
@@ -285,44 +298,44 @@ export default function DashboardAdmin() {
 
 
       {/* === NUEVO BLOQUE: Estado de sistemas eólicos === */}
-      <Card className="shadow-sm border-0 mb-4">
+  <Card className="shadow-sm border-0 mb-4 bg-white" style={{ borderRadius: 18, boxShadow: "0 2px 16px #1976d233" }}>
         <Card.Body>
           <div className="d-flex align-items-center justify-content-between mb-3">
-            <h5 className="mb-0">Sistemas eólicos — estado general</h5>
+            <h5 className="mb-0 fw-bold" style={{ color: "#1976d2" }}>Sistemas eólicos — estado general</h5>
             {cargandoEolicos && <span className="text-muted small">Cargando…</span>}
           </div>
 
           {/* KPIs eólicos */}
           <Row className="g-3">
-            <Col md={3}>
-              <Card className="border-0 bg-light h-100">
+            <Col xs={6} md={3}>
+              <Card className="border-0 bg-light h-100" style={{ borderRadius: 14 }}>
                 <Card.Body>
                   <div className="text-muted small">Usuarios totales</div>
-                  <div className="fs-4 fw-bold">{kpisEol.totalUsuarios}</div>
+                  <div className="fs-3 fw-bold">{kpisEol.totalUsuarios}</div>
                 </Card.Body>
               </Card>
             </Col>
-            <Col md={3}>
-              <Card className="border-0 h-100" style={{ background: "rgba(108,117,125,.08)" }}>
+            <Col xs={6} md={3}>
+              <Card className="border-0 h-100" style={{ background: "rgba(108,117,125,.08)", borderRadius: 14 }}>
                 <Card.Body>
                   <div className="text-muted small">Con eólico asignado</div>
-                  <div className="fs-4 fw-bold">{kpisEol.totalAsignados}</div>
+                  <div className="fs-3 fw-bold">{kpisEol.totalAsignados}</div>
                 </Card.Body>
               </Card>
             </Col>
-            <Col md={3}>
-              <Card className="border-0 h-100" style={{ background: "rgba(40,167,69,.08)" }}>
+            <Col xs={6} md={3}>
+              <Card className="border-0 h-100" style={{ background: "rgba(40,167,69,.08)", borderRadius: 14 }}>
                 <Card.Body>
                   <div className="text-muted small">Activados</div>
-                  <div className="fs-4 fw-bold text-success">{kpisEol.activados}</div>
+                  <div className="fs-3 fw-bold text-success">{kpisEol.activados}</div>
                 </Card.Body>
               </Card>
             </Col>
-            <Col md={3}>
-              <Card className="border-0 h-100" style={{ background: "rgba(220,53,69,.08)" }}>
+            <Col xs={6} md={3}>
+              <Card className="border-0 h-100" style={{ background: "rgba(220,53,69,.08)", borderRadius: 14 }}>
                 <Card.Body>
                   <div className="text-muted small">Desactivados</div>
-                  <div className="fs-4 fw-bold text-danger">{kpisEol.desactivados}</div>
+                  <div className="fs-3 fw-bold text-danger">{kpisEol.desactivados}</div>
                 </Card.Body>
               </Card>
             </Col>
@@ -382,14 +395,14 @@ export default function DashboardAdmin() {
       {/* === FIN BLOQUE NUEVO === */}
 
       {/* Gráfico principal */}
-      <Card className="shadow-sm mb-4 border-0" style={{ minHeight: 420 }}>
+  <Card className="shadow-sm mb-4 border-0 bg-white" style={{ minHeight: 420, borderRadius: 18, boxShadow: "0 2px 16px #1976d233" }}>
         <Card.Body>
           {cargando ? (
             <div className="d-flex align-items-center justify-content-center" style={{ minHeight: 320 }}>
-              <Spinner animation="border" />
+              <Spinner animation="border" variant="primary" style={{ width: 60, height: 60 }} />
             </div>
           ) : lecturas.length === 0 ? (
-            <p className="text-center text-muted m-0">No hay lecturas para mostrar.</p>
+            <p className="text-center text-muted m-0" style={{ fontSize: 20 }}>No hay lecturas para mostrar.</p>
           ) : (
             <div style={{ height: 340 }}>
               <Line ref={lineRef} data={lineData} options={opcionesGrafico} />
@@ -399,10 +412,10 @@ export default function DashboardAdmin() {
       </Card>
 
       {/* Alertas recientes */}
-      <Card className="shadow-sm border-0 mb-4">
+  <Card className="shadow-sm border-0 mb-4 bg-white" style={{ borderRadius: 18, boxShadow: "0 2px 16px #1976d233" }}>
         <Card.Body>
           <div className="d-flex align-items-center justify-content-between mb-2">
-            <h5 className="mb-0">Últimas alertas</h5>
+            <h5 className="mb-0 fw-bold" style={{ color: "#d32f2f" }}>Últimas alertas</h5>
             <span className="text-muted small">
               {alertas.length ? `Mostrando ${Math.min(alertas.length, 8)} de ${alertas.length}` : "—"}
             </span>
@@ -412,28 +425,29 @@ export default function DashboardAdmin() {
           ) : (
             <ul className="list-group">
               {alertas.slice(0, 8).map((a, i) => (
-                <li key={i} className="list-group-item d-flex justify-content-between align-items-center">
-                  <div>
-                    <strong>{a?.login || "usuario"}</strong>{" "}
+                <li key={i} className="list-group-item d-flex flex-column flex-md-row justify-content-between align-items-md-center" style={{ fontSize: 17 }}>
+                  <div className="d-flex flex-column flex-md-row align-items-md-center gap-2">
+                    <strong className="me-2" style={{ color: "#1976d2" }}>{a?.login || "usuario"}</strong>
                     <Badge bg="secondary" className="me-2">
                       {a?.rol || "usuario"}
                     </Badge>
                     <span className="text-muted">
                       • {a?.fecha_lectura ? new Date(a.fecha_lectura).toLocaleString() : "Sin fecha"}
                     </span>
-                    <div className="small">
-                      Voltaje: {fmt(a?.voltaje, 2, " V")} · Batería: {fmt(a?.bateria, 0, " %")} · Consumo:{" "}
-                      {fmt(a?.consumo, 1, " W")}
-                    </div>
                   </div>
-                  <Badge bg="warning" text="dark">Atención</Badge>
+                  <div className="small mt-2 mt-md-0">
+                    <span className="me-2">🔌 {fmt(a?.voltaje, 2, " V")}</span>
+                    <span className="me-2">🔋 {fmt(a?.bateria, 0, " %")}</span>
+                    <span className="me-2">⚡ {fmt(a?.consumo, 1, " W")}</span>
+                  </div>
+                  <Badge bg="warning" text="dark" className="ms-md-3">Atención</Badge>
                 </li>
               ))}
             </ul>
           )}
-          <div className="mt-3 d-flex gap-2">
-            <Button variant="primary" onClick={() => navigate("/alertas")}>Ver todas las alertas</Button>
-            <Button variant="success" onClick={() => navigate("/graficos")}>Ver gráficos detallados</Button>
+          <div className="mt-3 d-flex flex-column flex-md-row gap-2">
+            <Button variant="primary" size="lg" style={{ fontWeight: 500 }} onClick={() => navigate("/alertas")}>Ver todas las alertas</Button>
+            <Button variant="success" size="lg" style={{ fontWeight: 500 }} onClick={() => navigate("/graficos")}>Ver gráficos detallados</Button>
           </div>
         </Card.Body>
       </Card>
