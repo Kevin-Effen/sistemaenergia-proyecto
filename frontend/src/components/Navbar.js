@@ -103,11 +103,15 @@ function NavBarComponent({ usuario: usuarioProp, onLogout }) {
 
   const rol = (me?.rol || datosUsuarioLS?.rol || rolLS || "").toLowerCase();
   
-  // Nombre a mostrar: prioriza los datos cargados, luego localStorage
+  // Nombre a mostrar: solo el primer nombre
+  const getFirstName = (fullName) => {
+    if (!fullName) return "";
+    return fullName.trim().split(/\s+/)[0];
+  };
   const displayName =
-    usuarioProp ||
-    me?.nombre_completo ||
-    datosUsuarioLS?.nombre ||
+    getFirstName(usuarioProp) ||
+    getFirstName(me?.nombre_completo) ||
+    getFirstName(datosUsuarioLS?.nombre) ||
     datosUsuarioLS?.usuario ||
     me?.login ||
     datosUsuarioLS?.login ||
@@ -118,10 +122,13 @@ function NavBarComponent({ usuario: usuarioProp, onLogout }) {
 
   const getInitials = (name) => {
     if (!name) return "U";
-    const parts = name.trim().split(/\s+/);
-    const first = parts[0]?.[0] || "";
-    const last = parts.length > 1 ? parts[parts.length - 1]?.[0] || "" : "";
-    return (first + last).toUpperCase() || "U";
+    // Eliminar cualquier carácter que no sea letra
+    const clean = name.replace(/[^A-Za-zÁÉÍÓÚáéíóúÑñÜü]/g, ' ').trim();
+    const parts = clean.split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "U";
+    if (parts.length === 1) return parts[0][0].toUpperCase();
+    // Tomar solo la primera letra de las dos primeras palabras
+    return (parts[0][0] + parts[1][0]).toUpperCase();
   };
 
   const handleClose = () => setShowMenu(false);
@@ -259,16 +266,13 @@ function NavBarComponent({ usuario: usuarioProp, onLogout }) {
               <NavDropdown
                 align="end"
                 title={
-                  <div className="user-dropdown-modern">
-                    <div className="user-avatar-modern">
-                      {getInitials(displayName)}
-                    </div>
-                    <div className="user-details">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="user-avatar-modern">{getInitials(displayName)}</span>
+                    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
                       <span className="user-name-modern">{shouldShowLoading ? "Cargando..." : displayName}</span>
-                      <span className="user-role-modern">{rol === "administrador" ? "Admin" : "Usuario"}</span>
-                    </div>
-                    <i className="bi bi-chevron-down"></i>
-                  </div>
+                      <span className="user-role-modern" style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{rol === "administrador" ? "Admin" : "Usuario"}</span>
+                    </span>
+                  </span>
                 }
                 id="user-nav-dropdown"
               >
@@ -388,7 +392,11 @@ function NavBarComponent({ usuario: usuarioProp, onLogout }) {
                     >
                       {getInitials(displayName)}
                     </span>
-                    {shouldShowLoading ? "Cargando..." : displayName}
+                    {shouldShowLoading ? "Cargando..." :
+                      getFirstName(usuarioProp) ||
+                      getFirstName(me?.nombre_completo) ||
+                      getFirstName(datosUsuarioLS?.nombre) ||
+                      datosUsuarioLS?.usuario || me?.login || datosUsuarioLS?.login || "Usuario"}
                   </span>
                 }
                 id="user-nav-dropdown"
@@ -448,10 +456,7 @@ function NavBarComponent({ usuario: usuarioProp, onLogout }) {
               color: "white",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              fontSize: 28,
-              boxShadow: "0 6px 18px rgba(0,0,0,.2)",
-              border: "3px solid white",
+              justifyContent: "center"
             }}
           >
             {getInitials(displayName)}
