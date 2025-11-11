@@ -1,0 +1,86 @@
+{
+  "info": {
+    "name": "ESP32 Ingest API",
+    "_postman_id": "c2c3f0fe-0000-0000-0000-esp32ingest",
+    "description": "Colección para probar la API de ingestión",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3002/api/v1/health",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3002",
+          "path": [
+            "api",
+            "v1",
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Insert lectura",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-api-key",
+            "value": "pon_aqui_un_token_largo_y_unico"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"usuario_id\": 6,\n  \"voltaje\": 12.7,\n  \"bateria\": 83.4,\n  \"consumo\": 45.8\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3002/api/v1/lecturas",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3002",
+          "path": [
+            "api",
+            "v1",
+            "lecturas"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Última lectura por usuario",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3002/api/v1/lecturas/ultimo/6",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3002",
+          "path": [
+            "api",
+            "v1",
+            "lecturas",
+            "ultimo",
+            "6"
+          ]
+        }
+      }
+    }
+  ],
+  "protocolProfileBehavior": {}
+}
