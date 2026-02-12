@@ -1,0 +1,562 @@
+// src/components/Navbar.js
+import React, { useState, useEffect } from "react";
+import {
+  Navbar,
+  Nav,
+  Container,
+  NavDropdown,
+  Offcanvas,
+  Button,
+  Modal,
+  Spinner,
+  Badge,
+} from "react-bootstrap";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import api from "../api/axios";
+import "animate.css";
+import "../styles/navbar-simple.css";
+
+function NavBarComponent({ usuario: usuarioProp, onLogout }) {
+  const navigate = useNavigate();
+  const [showMenu, setShowMenu] = useState(false);
+  // const [bgIndex, setBgIndex] = useState(0); // Ya no necesitamos rotar imágenes
+  const [me, setMe] = useState(null);                   // /me-detalle
+  const [loadingMe, setLoadingMe] = useState(true);
+  const [showPerfil, setShowPerfil] = useState(false);  // Modal "Mi perfil"
+  const [alertasCount, setAlertasCount] = useState(0);  // Contador de alertas
+
+  // const paisajes = ["/paisaje1.jpg", "/paisaje3.png", "/paisaje2.jpg"]; // Ya no se usan
+  const location = useLocation();
+  const isLoginPage = location.pathname === "/" || location.pathname === "/login";
+
+  const rolLS = (localStorage.getItem("rol") || "").toLowerCase();
+
+  // Ya no necesitamos rotar imágenes de fondo
+  // useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     setBgIndex((prev) => (prev + 1) % paisajes.length);
+  //   }, 5000);
+  //   return () => clearInterval(interval);
+  // }, []);
+
+  // Cargar detalle del usuario
+  useEffect(() => {
+    let cancel = false;
+    const cargar = async () => {
+      try {
+        setLoadingMe(true);
+        const res = await api.get("/me-detalle");
+        if (!cancel) setMe(res.data);
+      } catch (e) {
+        if (e?.response?.status === 401) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("rol");
+          localStorage.removeItem("usuario");
+          navigate("/", { replace: true });
+        }
+      } finally {
+        if (!cancel) setLoadingMe(false);
+      }
+    };
+    if (!isLoginPage && localStorage.getItem("token")) cargar();
+    return () => { cancel = true; };
+  }, [isLoginPage, navigate]);
+
+  // Cargar contador de alertas
+  useEffect(() => {
+    let cancel = false;
+    const cargarAlertas = async () => {
+      try {
+        const res = await api.get("/alertas");
+        if (!cancel && Array.isArray(res.data)) {
+          setAlertasCount(res.data.length);
+        }
+      } catch (e) {
+        // Silenciar error, no es crítico
+      }
+    };
+    if (!isLoginPage && localStorage.getItem("token")) {
+      cargarAlertas();
+      // Actualizar cada 30 segundos
+      const interval = setInterval(cargarAlertas, 30000);
+      return () => {
+        cancel = true;
+        clearInterval(interval);
+      };
+    }
+    return () => { cancel = true; };
+  }, [isLoginPage]);
+
+  // Fallbacks
+  let datosUsuarioLS = {};
+  try { datosUsuarioLS = JSON.parse(localStorage.getItem("usuario") || "{}"); } catch { datosUsuarioLS = {}; }
+
+  const rol = (me?.rol || datosUsuarioLS?.rol || rolLS || "").toLowerCase();
+  const displayName =
+    usuarioProp ||
+    me?.nombre_completo ||
+    datosUsuarioLS?.nombre ||
+    datosUsuarioLS?.usuario ||
+    me?.login ||
+    "Usuario";
+
+  const getInitials = (name) => {
+    if (!name) return "U";
+    const parts = name.trim().split(/\s+/);
+    const first = parts[0]?.[0] || "";
+    const last = parts.length > 1 ? parts[parts.length - 1]?.[0] || "" : "";
+    return (first + last).toUpperCase() || "U";
+  };
+
+  const handleClose = () => setShowMenu(false);
+  const handleShow = () => setShowMenu(true);
+  const openPerfil = () => setShowPerfil(true);
+  const closePerfil = () => setShowPerfil(false);
+
+  const handleLogoutClick = () => {
+    if (onLogout) {
+      onLogout();
+    } else {
+      localStorage.removeItem("token");
+      localStorage.removeItem("rol");
+      localStorage.removeItem("usuario");
+      window.dispatchEvent(new Event("auth-changed"));
+      navigate("/", { replace: true });
+    }
+  };
+
+  const fmtFecha = (f) => {
+    try {
+      if (!f) return "—";
+      const d = new Date(f);
+      if (isNaN(d.getTime())) return String(f).split("T")[0] || "—";
+      return d.toLocaleDateString();
+    } catch { return "—"; }
+  };
+
+  const copy = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text || "");
+    } catch { /* no-op */ }
+  };
+
+  return (
+    <>
+      <Navbar expand="lg" bg="dark" variant="dark">
+        <Container fluid>
+          {/* Título */}
+          <Navbar.Brand as={Link} to="/dashboard">
+            <h1 className="m-0">⚡ Sistema de Energía Eólica</h1>
+          </Navbar.Brand>
+
+          {/* Botón hamburguesa (mobile) */}
+          {!isLoginPage && (
+            <Navbar.Toggle aria-controls="basic-navbar-nav" />
+          )}
+
+          {/* Menú */}
+          {!isLoginPage && (
+            <Navbar.Collapse id="basic-navbar-nav">
+              <Nav className="mx-auto">
+                <Nav.Link as={Link} to="/dashboard">
+                  <i className="bi bi-speedometer2 me-2"></i>
+                  Principal
+                </Nav.Link>
+                <Nav.Link as={Link} to="/graficos">
+                  <i className="bi bi-bar-chart-fill me-2"></i>
+                  Gráficos
+                </Nav.Link>
+
+                {rol === "usuario" && (
+                  <Nav.Link as={Link} to="/contactos" className="text-white nav-item-hover">
+                    <i className="bi bi-people-fill me-2"></i>
+                    Contactos
+                  </Nav.Link>
+                )}
+
+                {rol === "administrador" && (
+                  <>
+                    <Nav.Link as={Link} to="/usuarios" className="text-white nav-item-hover">
+                      <i className="bi bi-person-fill me-2"></i>
+                      Usuarios
+                    </Nav.Link>
+                    <Nav.Link as={Link} to="/eolicos" className="text-white nav-item-hover">
+                      <i className="bi bi-wind me-2"></i>
+                      Alquiler
+                    </Nav.Link>
+                    <Nav.Link as={Link} to="/reportes" className="text-white nav-item-hover">
+                      <i className="bi bi-file-earmark-pdf-fill me-2"></i>
+                      Reportes PDF
+                    </Nav.Link>
+                    <Nav.Link as={Link} to="/alertas" className="text-white nav-item-hover">
+                      <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                      Alertas
+                      {alertasCount > 0 && (
+                        <Badge bg="danger" className="ms-2 animate__animated animate__pulse animate__infinite">
+                          {alertasCount}
+                        </Badge>
+                      )}
+                    </Nav.Link>
+                  </>
+                )}
+
+                {rol === "usuario" && (
+                  <Nav.Link as={Link} to="/alertas" className="text-white nav-item-hover">
+                    <i className="bi bi-bell-fill me-2"></i>
+                    Mis Alertas
+                    {alertasCount > 0 && (
+                      <Badge bg="warning" text="dark" className="ms-2 animate__animated animate__pulse animate__infinite">
+                        {alertasCount}
+                      </Badge>
+                    )}
+                  </Nav.Link>
+                )}
+              </Nav>
+
+              {/* Dropdown usuario - Extremo derecho */}
+              <Nav>
+                <NavDropdown
+                  align="end"
+                  title={
+                    <span className="d-inline-flex align-items-center">
+                      <span
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: "50%",
+                          background: "linear-gradient(135deg,#22c55e,#16a34a)",
+                          color: "white",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 14,
+                          fontWeight: 600,
+                          marginRight: 8,
+                          boxShadow: "0 0 0 2px rgba(255,255,255,.2)",
+                        }}
+                      >
+                        {getInitials(displayName)}
+                      </span>
+                      <span className="text-white">{loadingMe ? "Cargando..." : displayName}</span>
+                    </span>
+                  }
+                  id="user-nav-dropdown"
+                >
+                  <NavDropdown.Item onClick={openPerfil}>
+                    <i className="bi bi-person-circle me-2"></i>
+                    Mi perfil
+                  </NavDropdown.Item>
+                  <NavDropdown.Divider />
+                  <NavDropdown.Item onClick={handleLogoutClick}>
+                    <i className="bi bi-box-arrow-right me-2"></i>
+                    Cerrar sesión
+                  </NavDropdown.Item>
+                </NavDropdown>
+              </Nav>
+            </Navbar.Collapse>
+          )}
+        </Container>
+      </Navbar>
+
+      {/* Menú lateral (mobile) */}
+      {!isLoginPage && (
+        <Offcanvas show={showMenu} onHide={handleClose} placement="end" style={{ width: "280px" }}>
+          <Offcanvas.Header closeButton>
+            <Offcanvas.Title>Sistema de Energía</Offcanvas.Title>
+          </Offcanvas.Header>
+          <Offcanvas.Body>
+            <Nav className="flex-column">
+              <Nav.Link as={Link} to="/dashboard" onClick={handleClose}>
+                <i className="bi bi-speedometer2"></i>
+                Principal
+              </Nav.Link>
+              <Nav.Link as={Link} to="/graficos" onClick={handleClose}>
+                <i className="bi bi-bar-chart-fill"></i>
+                Gráficos
+              </Nav.Link>
+
+              {rol === "usuario" && (
+                <Nav.Link as={Link} to="/contactos" onClick={handleClose}>
+                  <i className="bi bi-people-fill"></i>
+                  Contactos
+                </Nav.Link>
+              )}
+
+              {rol === "administrador" && (
+                <>
+                  <Nav.Link as={Link} to="/usuarios" onClick={handleClose}>
+                    <i className="bi bi-person-fill"></i>
+                    Usuarios
+                  </Nav.Link>
+                  <Nav.Link as={Link} to="/eolicos" onClick={handleClose}>
+                    <i className="bi bi-wind"></i>
+                    Alquiler
+                  </Nav.Link>
+                  <Nav.Link as={Link} to="/reportes" onClick={handleClose}>
+                    <i className="bi bi-file-earmark-pdf-fill"></i>
+                    Reportes PDF
+                  </Nav.Link>
+                  <Nav.Link 
+                    as={Link} 
+                    to="/alertas" 
+                    onClick={handleClose} 
+                    className="d-flex align-items-center justify-content-between"
+                  >
+                    <span>
+                      <i className="bi bi-exclamation-triangle-fill"></i>
+                      Alertas Globales
+                    </span>
+                    {alertasCount > 0 && (
+                      <Badge bg="danger" className="animate__animated animate__pulse animate__infinite">
+                        {alertasCount}
+                      </Badge>
+                    )}
+                  </Nav.Link>
+                </>
+              )}
+
+              {rol === "usuario" && (
+                <Nav.Link 
+                  as={Link} 
+                  to="/alertas" 
+                  onClick={handleClose} 
+                  className="d-flex align-items-center justify-content-between"
+                >
+                  <span>
+                    <i className="bi bi-bell-fill"></i>
+                    Mis Alertas
+                  </span>
+                  {alertasCount > 0 && (
+                    <Badge bg="warning" text="dark" className="animate__animated animate__pulse animate__infinite">
+                      {alertasCount}
+                    </Badge>
+                  )}
+                </Nav.Link>
+              )}
+
+              <NavDropdown
+                title={
+                  <span className="d-inline-flex align-items-center">
+                    <span
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: "50%",
+                        background: "linear-gradient(135deg,#22c55e,#16a34a)",
+                        color: "white",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 14,
+                        marginRight: 10,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {getInitials(displayName)}
+                    </span>
+                    {loadingMe ? "Cargando..." : displayName}
+                  </span>
+                }
+                id="user-nav-dropdown-mobile"
+                className="mt-3"
+              >
+                <NavDropdown.Item
+                  onClick={() => {
+                    handleClose();
+                    openPerfil();
+                  }}
+                >
+                  <i className="bi bi-person-circle me-2"></i>
+                  Mi perfil
+                </NavDropdown.Item>
+                <NavDropdown.Divider />
+                <NavDropdown.Item
+                  onClick={() => {
+                    handleClose();
+                    handleLogoutClick();
+                  }}
+                >
+                  <i className="bi bi-box-arrow-right me-2"></i>
+                  Cerrar sesión
+                </NavDropdown.Item>
+              </NavDropdown>
+            </Nav>
+          </Offcanvas.Body>
+        </Offcanvas>
+      )}
+
+      {/* Modal Mi Perfil (fullscreen en móviles) */}
+      <Modal
+        show={showPerfil}
+        onHide={closePerfil}
+        centered
+        dialogClassName="modal-fullscreen-sm-down"
+      >
+        <div className="position-relative">
+          {/* Cover */}
+          <div
+            style={{
+              height: 140,
+              background:
+                "linear-gradient(135deg, rgba(34,197,94,0.9), rgba(16,185,129,0.9)), url('/paisaje2.jpg') center/cover",
+              borderTopLeftRadius: ".3rem",
+              borderTopRightRadius: ".3rem",
+            }}
+          />
+          {/* Avatar */}
+          <div
+            style={{
+              position: "absolute",
+              top: 90,
+              left: 24,
+              width: 72,
+              height: 72,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg,#22c55e,#16a34a)",
+              color: "white",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 28,
+              boxShadow: "0 6px 18px rgba(0,0,0,.2)",
+              border: "3px solid white",
+            }}
+          >
+            {getInitials(displayName)}
+          </div>
+        </div>
+
+        <Modal.Header closeButton className="pt-4" />
+
+        <Modal.Body>
+          {/* Header info */}
+          <div className="d-flex flex-wrap align-items-end gap-2 ps-2" style={{ marginTop: -32 }}>
+            <div className="me-auto" style={{ minWidth: 0 }}>
+              <div className="fw-bold" style={{ fontSize: 18 }}>
+                {loadingMe ? (
+                  <span className="text-muted">
+                    <Spinner animation="grow" size="sm" /> Cargando…
+                  </span>
+                ) : (
+                  me?.nombre_completo || displayName
+                )}
+              </div>
+              {/* login puede ser largo: permitir quiebre */}
+              <div
+                className="text-muted small text-break"
+                style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
+              >
+                {me?.login || "—"}
+              </div>
+            </div>
+            {rol && (
+              <Badge bg={rol === "administrador" ? "danger" : "success"} pill>
+                {rol.charAt(0).toUpperCase() + rol.slice(1)}
+              </Badge>
+            )}
+          </div>
+
+          {/* Datos */}
+          <div className="row g-3 mt-2">
+            <div className="col-12 col-md-6">
+              <div className="border rounded px-3 py-2 h-100">
+                <div className="d-flex justify-content-between align-items-center" style={{ gap: 8 }}>
+                  {/* minWidth:0 para que funcione el truncado/quiebre dentro de flex */}
+                  <div style={{ minWidth: 0 }}>
+                    <div className="text-muted small">Usuario (login)</div>
+                    <div
+                      className="fw-semibold text-break"
+                      style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
+                    >
+                      {me?.login || "—"}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline-secondary"
+                    onClick={() => copy(me?.login)}
+                    title="Copiar"
+                  >
+                    Copiar
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-12 col-md-6">
+              <div className="border rounded px-3 py-2 h-100">
+                <div className="d-flex justify-content-between align-items-center" style={{ gap: 8 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="text-muted small">Email</div>
+                    <div
+                      className="fw-semibold text-break"
+                      style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
+                    >
+                      {me?.email || "—"}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline-secondary"
+                    onClick={() => copy(me?.email)}
+                    title="Copiar"
+                  >
+                    Copiar
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-12 col-md-6">
+              <div className="border rounded px-3 py-2 h-100">
+                <div className="text-muted small">Fecha de nacimiento</div>
+                <div className="fw-semibold">{fmtFecha(me?.fecha_nacimiento)}</div>
+              </div>
+            </div>
+
+            <div className="col-12 col-md-6">
+              <div className="border rounded px-3 py-2 h-100">
+                <div className="text-muted small">Teléfono</div>
+                <div className="fw-semibold">{me?.telefono || "—"}</div>
+              </div>
+            </div>
+
+            <div className="col-12">
+              <div className="border rounded px-3 py-2 h-100">
+                <div className="text-muted small">Dirección</div>
+                <div
+                  className="fw-semibold text-break"
+                  style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
+                >
+                  {me?.direccion || "—"}
+                </div>
+              </div>
+            </div>
+          </div>
+        </Modal.Body>
+
+        <Modal.Footer className="d-flex justify-content-between">
+          <div className="text-muted small">
+            {me?.email ? "Tus datos se muestran solo a ti." : ""}
+          </div>
+          <Button variant="secondary" onClick={closePerfil}>
+            Cerrar
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <style>{`
+        .nav-item-hover { cursor: pointer; }
+        .nav-item-hover:hover,
+        .nav-item-hover:active { text-decoration: underline; }
+        .text-shadow { text-shadow: 0 2px 6px rgba(0,0,0,.35); }
+        /* Ajustes del modal en pantallas pequeñas */
+        @media (max-width: 576px) {
+          .modal-fullscreen-sm-down .modal-body { padding-top: .5rem; }
+        }
+      `}</style>
+    </>
+  );
+}
+
+export default NavBarComponent;

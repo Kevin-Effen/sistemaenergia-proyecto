@@ -1,0 +1,10 @@
+<svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="56" height="56" rx="16" fill="#e3f2fd"/>
+  <g>
+    <circle cx="28" cy="28" r="16" fill="#1976d2"/>
+    <path d="M28 16 L32 28 L28 40 L24 28 Z" fill="#fff"/>
+    <path d="M28 22 L34 28 L28 34 L22 28 Z" fill="#90caf9"/>
+    <circle cx="28" cy="28" r="4" fill="#fff"/>
+  </g>
+  <text x="28" y="52" text-anchor="middle" font-size="10" fill="#1976d2" font-family="Arial">Eólico</text>
+</svg>
